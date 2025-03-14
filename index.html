@@ -92,6 +92,20 @@
         #copy-button:hover {
             background-color: #45a049;
         }
+        #peer-list {
+            max-height: 100px;
+            overflow-y: auto;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            padding: 5px;
+        }
+        .peer-item {
+            cursor: pointer;
+            padding: 5px;
+        }
+        .peer-item:hover {
+            background-color: #f0f0f0;
+        }
     </style>
 </head>
 <body>
@@ -110,6 +124,7 @@
             <button id="copy-button">Copy ID</button><br>
             <label>Connect to ID: <input type="text" id="remote-id" placeholder="Enter other user's Peer ID"></label>
             <button id="connect-button">Connect</button>
+            <div id="peer-list"></div>
         </div>
     </div>
 
@@ -126,11 +141,22 @@
         const remoteIdInput = document.getElementById('remote-id');
         const connectButton = document.getElementById('connect-button');
         const copyButton = document.getElementById('copy-button');
+        const peerList = document.getElementById('peer-list');
 
         // Random display name
         const currentUser = `User_${Math.random().toString(36).substr(2, 5)}`;
         let peer;
         let conn;
+
+        // Load or generate persistent PeerJS ID
+        let myPeerId = localStorage.getItem('myPeerId');
+        if (!myPeerId) {
+            myPeerId = `${Math.random().toString(36).substr(2, 9)}-${Date.now()}`; // Unique ID
+            localStorage.setItem('myPeerId', myPeerId);
+        }
+
+        // Load peer list from localStorage
+        let knownPeers = JSON.parse(localStorage.getItem('knownPeers')) || {};
 
         // Add message to chat
         function addMessage(text, sender, isSent) {
@@ -153,27 +179,51 @@
             }
         }
 
-        // Initialize PeerJS
-        peer = new Peer(); // Generates a unique ID
+        // Update peer list UI
+        function updatePeerList() {
+            peerList.innerHTML = '';
+            for (const [id, name] of Object.entries(knownPeers)) {
+                const peerItem = document.createElement('div');
+                peerItem.classList.add('peer-item');
+                peerItem.textContent = `${name} (${id})`;
+                peerItem.addEventListener('click', () => {
+                    remoteIdInput.value = id;
+                    connectButton.click();
+                });
+                peerList.appendChild(peerItem);
+            }
+        }
+
+        // Initialize PeerJS with persistent ID
+        peer = new Peer(myPeerId);
         peer.on('open', (id) => {
             peerIdInput.value = id;
             status.textContent = 'Your Peer ID: ' + id + ' (Share this)';
             addMessage('Share your Peer ID with someone to chat!', 'System', false);
-            console.log('Generated Peer ID:', id); // Debug
+            console.log('Peer ID:', id);
+            updatePeerList();
         });
 
         // Handle incoming connections
         peer.on('connection', (connection) => {
             conn = connection;
             setupConnection();
+            // Store incoming peer info
+            knownPeers[conn.peer] = conn.metadata?.name || 'Unknown';
+            localStorage.setItem('knownPeers', JSON.stringify(knownPeers));
+            updatePeerList();
         });
 
         // Connect to another peer
         connectButton.addEventListener('click', () => {
             const remoteId = remoteIdInput.value.trim();
-            if (remoteId) {
-                conn = peer.connect(remoteId);
+            if (remoteId && remoteId !== myPeerId) {
+                conn = peer.connect(remoteId, { metadata: { name: currentUser } });
                 setupConnection();
+                // Store remote peer info
+                knownPeers[remoteId] = 'Unknown'; // Will update with name on connection
+                localStorage.setItem('knownPeers', JSON.stringify(knownPeers));
+                updatePeerList();
             }
         });
 
@@ -185,6 +235,12 @@
                 sendButton.disabled = false;
                 connectButton.disabled = true;
                 addMessage('Connected to peer!', 'System', false);
+                // Update peer name if provided
+                if (conn.metadata?.name) {
+                    knownPeers[conn.peer] = conn.metadata.name;
+                    localStorage.setItem('knownPeers', JSON.stringify(knownPeers));
+                    updatePeerList();
+                }
             });
 
             conn.on('data', (data) => {
