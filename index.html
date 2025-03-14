@@ -81,6 +81,17 @@
             padding: 5px;
             margin: 5px;
         }
+        #copy-button {
+            padding: 5px 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #copy-button:hover {
+            background-color: #45a049;
+        }
     </style>
 </head>
 <body>
@@ -95,8 +106,9 @@
             <button id="send-button" disabled>Send</button>
         </div>
         <div class="connection-controls">
-            <label>Your ID: <input type="text" id="peer-id" readonly></label><br>
-            <label>Connect to ID: <input type="text" id="remote-id" placeholder="Enter other user's ID"></label>
+            <label>Your Peer ID: <input type="text" id="peer-id" readonly></label>
+            <button id="copy-button">Copy ID</button><br>
+            <label>Connect to ID: <input type="text" id="remote-id" placeholder="Enter other user's Peer ID"></label>
             <button id="connect-button">Connect</button>
         </div>
     </div>
@@ -113,8 +125,9 @@
         const peerIdInput = document.getElementById('peer-id');
         const remoteIdInput = document.getElementById('remote-id');
         const connectButton = document.getElementById('connect-button');
+        const copyButton = document.getElementById('copy-button');
 
-        // Random user name
+        // Random display name
         const currentUser = `User_${Math.random().toString(36).substr(2, 5)}`;
         let peer;
         let conn;
@@ -141,11 +154,12 @@
         }
 
         // Initialize PeerJS
-        peer = new Peer(); // Automatically generates a unique ID
+        peer = new Peer(); // Generates a unique ID
         peer.on('open', (id) => {
             peerIdInput.value = id;
-            status.textContent = 'Your ID: ' + id + ' (Share this with others)';
-            addMessage('Share your ID with someone to start chatting!', 'System', false);
+            status.textContent = 'Your Peer ID: ' + id + ' (Share this)';
+            addMessage('Share your Peer ID with someone to chat!', 'System', false);
+            console.log('Generated Peer ID:', id); // Debug
         });
 
         // Handle incoming connections
@@ -191,6 +205,19 @@
                 status.textContent = 'Error: ' + err.message;
             });
         }
+
+        // Copy Peer ID to clipboard
+        copyButton.addEventListener('click', () => {
+            peerIdInput.select();
+            navigator.clipboard.writeText(peerIdInput.value)
+                .then(() => {
+                    addMessage('Peer ID copied to clipboard!', 'System', false);
+                })
+                .catch((err) => {
+                    console.error('Failed to copy:', err);
+                    addMessage('Failed to copy ID', 'System', false);
+                });
+        });
 
         // Event listeners for sending messages
         sendButton.addEventListener('click', sendMessage);
