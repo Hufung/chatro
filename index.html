@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebRTC Chat App</title>
+    <title>PeerJS Chat App</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -76,17 +76,17 @@
             padding: 10px;
             border-top: 1px solid #ddd;
         }
-        textarea {
-            width: 100%;
-            height: 80px;
-            margin: 5px 0;
+        #peer-id, #remote-id {
+            width: 200px;
+            padding: 5px;
+            margin: 5px;
         }
     </style>
 </head>
 <body>
     <div class="chat-container">
         <div class="chat-header">
-            <h2>WebRTC Chat App</h2>
+            <h2>PeerJS Chat App</h2>
         </div>
         <div class="status" id="status">Disconnected</div>
         <div class="chat-messages" id="chat-messages"></div>
@@ -95,12 +95,14 @@
             <button id="send-button" disabled>Send</button>
         </div>
         <div class="connection-controls">
-            <button id="start-button">Create Offer</button>
-            <textarea id="offer" placeholder="Your offer (share this with the other user)"></textarea>
-            <textarea id="answer" placeholder="Paste the other user's offer/answer here"></textarea>
-            <button id="connect-button">Connect with Answer</button>
+            <label>Your ID: <input type="text" id="peer-id" readonly></label><br>
+            <label>Connect to ID: <input type="text" id="remote-id" placeholder="Enter other user's ID"></label>
+            <button id="connect-button">Connect</button>
         </div>
     </div>
+
+    <!-- PeerJS Library -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 
     <script>
         // DOM elements
@@ -108,20 +110,14 @@
         const messageInput = document.getElementById('message-input');
         const sendButton = document.getElementById('send-button');
         const status = document.getElementById('status');
-        const startButton = document.getElementById('start-button');
-        const offerTextarea = document.getElementById('offer');
-        const answerTextarea = document.getElementById('answer');
+        const peerIdInput = document.getElementById('peer-id');
+        const remoteIdInput = document.getElementById('remote-id');
         const connectButton = document.getElementById('connect-button');
 
-        // WebRTC setup
-        const configuration = {
-            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] // Free STUN server
-        };
-        let peerConnection;
-        let dataChannel;
-
-        // Random user ID
+        // Random user name
         const currentUser = `User_${Math.random().toString(36).substr(2, 5)}`;
+        let peer;
+        let conn;
 
         // Add message to chat
         function addMessage(text, sender, isSent) {
@@ -134,83 +130,67 @@
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
-        // Send message via data channel
+        // Send message via PeerJS connection
         function sendMessage() {
             const text = messageInput.value.trim();
-            if (text && dataChannel && dataChannel.readyState === 'open') {
-                dataChannel.send(JSON.stringify({ sender: currentUser, text }));
+            if (text && conn && conn.open) {
+                conn.send(JSON.stringify({ sender: currentUser, text }));
                 addMessage(text, currentUser, true);
                 messageInput.value = '';
             }
         }
 
-        // Create offer (User A)
-        startButton.addEventListener('click', async () => {
-            peerConnection = new RTCPeerConnection(configuration);
-            dataChannel = peerConnection.createDataChannel('chat');
+        // Initialize PeerJS
+        peer = new Peer(); // Automatically generates a unique ID
+        peer.on('open', (id) => {
+            peerIdInput.value = id;
+            status.textContent = 'Your ID: ' + id + ' (Share this with others)';
+            addMessage('Share your ID with someone to start chatting!', 'System', false);
+        });
 
-            dataChannel.onopen = () => {
-                status.textContent = 'Connected';
+        // Handle incoming connections
+        peer.on('connection', (connection) => {
+            conn = connection;
+            setupConnection();
+        });
+
+        // Connect to another peer
+        connectButton.addEventListener('click', () => {
+            const remoteId = remoteIdInput.value.trim();
+            if (remoteId) {
+                conn = peer.connect(remoteId);
+                setupConnection();
+            }
+        });
+
+        // Setup connection handlers
+        function setupConnection() {
+            conn.on('open', () => {
+                status.textContent = 'Connected to ' + conn.peer;
                 messageInput.disabled = false;
                 sendButton.disabled = false;
-                startButton.disabled = true;
                 connectButton.disabled = true;
-            };
-            dataChannel.onmessage = (event) => {
-                const { sender, text } = JSON.parse(event.data);
+                addMessage('Connected to peer!', 'System', false);
+            });
+
+            conn.on('data', (data) => {
+                const { sender, text } = JSON.parse(data);
                 addMessage(text, sender, false);
-            };
-            dataChannel.onclose = () => {
+            });
+
+            conn.on('close', () => {
                 status.textContent = 'Disconnected';
                 messageInput.disabled = true;
                 sendButton.disabled = true;
-            };
+                connectButton.disabled = false;
+                addMessage('Peer disconnected', 'System', false);
+            });
 
-            peerConnection.onicecandidate = (event) => {
-                if (event.candidate === null) {
-                    offerTextarea.value = JSON.stringify(peerConnection.localDescription);
-                }
-            };
-
-            const offer = await peerConnection.createOffer();
-            await peerConnection.setLocalDescription(offer);
-        });
-
-        // Connect with answer (User B)
-        connectButton.addEventListener('click', async () => {
-            const remoteOffer = JSON.parse(answerTextarea.value);
-            peerConnection = new RTCPeerConnection(configuration);
-
-            peerConnection.ondatachannel = (event) => {
-                dataChannel = event.channel;
-                dataChannel.onopen = () => {
-                    status.textContent = 'Connected';
-                    messageInput.disabled = false;
-                    sendButton.disabled = false;
-                    startButton.disabled = true;
-                    connectButton.disabled = true;
-                };
-                dataChannel.onmessage = (event) => {
-                    const { sender, text } = JSON.parse(event.data);
-                    addMessage(text, sender, false);
-                };
-                dataChannel.onclose = () => {
-                    status.textContent = 'Disconnected';
-                    messageInput.disabled = true;
-                    sendButton.disabled = true;
-                };
-            };
-
-            peerConnection.onicecandidate = (event) => {
-                if (event.candidate === null) {
-                    offerTextarea.value = JSON.stringify(peerConnection.localDescription);
-                }
-            };
-
-            await peerConnection.setRemoteDescription(remoteOffer);
-            const answer = await peerConnection.createAnswer();
-            await peerConnection.setLocalDescription(answer);
-        });
+            conn.on('error', (err) => {
+                console.error('Connection error:', err);
+                status.textContent = 'Error: ' + err.message;
+            });
+        }
 
         // Event listeners for sending messages
         sendButton.addEventListener('click', sendMessage);
@@ -220,8 +200,11 @@
             }
         });
 
-        // Initial message
-        addMessage('1. User A: Click "Create Offer". 2. User B: Paste offer and click "Connect with Answer". 3. User A: Paste answer.', 'System', false);
+        // Handle PeerJS errors
+        peer.on('error', (err) => {
+            console.error('PeerJS error:', err);
+            status.textContent = 'Error: ' + err.type;
+        });
     </script>
 </body>
 </html>
