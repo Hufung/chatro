@@ -184,6 +184,12 @@
             transition: background 0.2s;
             font-size: clamp(0.9em, 3vw, 1em);
         }
+        .peer-item.online {
+            color: #2e7d32;
+        }
+        .peer-item.offline {
+            color: #d32f2f;
+        }
         .peer-item:hover {
             background: #e0f7fa;
         }
@@ -292,14 +298,24 @@
 
         // Load messages from localStorage
         let messages = JSON.parse(localStorage.getItem('chatMessages')) || [];
-
         let peer;
         let conn;
         let isOnline = navigator.onLine;
+        let peerStatus = {}; // Track peer online status
+
+        // Encode text to prevent XSS
+        function encodeHTML(text) {
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
 
         // Update username on input change
         usernameInput.addEventListener('change', () => {
-            currentUser = usernameInput.value.trim() || `User_${Math.random().toString(36).substr(2, 5)}`;
+            currentUser = encodeHTML(usernameInput.value.trim()) || `User_${Math.random().toString(36).substr(2, 5)}`;
             localStorage.setItem('chatUsername', currentUser);
             addMessage(`Username updated to "${currentUser}"`, 'System', false);
         });
@@ -320,7 +336,7 @@
             messageDiv.classList.add('message');
             messageDiv.classList.add(isSent ? 'sent' : 'received');
             const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            messageDiv.innerHTML = `<strong>${sender}</strong> (${time}): ${text}`;
+            messageDiv.innerHTML = `<strong>${encodeHTML(sender)}</strong> (${encodeHTML(time)}): ${encodeHTML(text)}`;
             chatMessages.appendChild(messageDiv);
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
@@ -333,8 +349,13 @@
             messages = JSON.parse(localStorage.getItem('chatMessages')) || [];
             chatMessages.innerHTML = '';
             messages.forEach(msg => {
-                addMessage(msg.text, msg.sender, msg.isSent);
+                const messageDiv = document.createElement('div');
+                messageDiv.classList.add('message');
+                messageDiv.classList.add(msg.isSent ? 'sent' : 'received');
+                messageDiv.innerHTML = `<strong>${encodeHTML(msg.sender)}</strong> (${encodeHTML(msg.time)}): ${encodeHTML(msg.text)}`;
+                chatMessages.appendChild(messageDiv);
             });
+            chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
         // Send message
@@ -354,19 +375,43 @@
             }
         }
 
-        // Update peer list UI
+        // Update peer list UI with online status
         function updatePeerList() {
             peerList.innerHTML = '';
             for (const [id, name] of Object.entries(knownPeers)) {
                 const peerItem = document.createElement('div');
                 peerItem.classList.add('peer-item');
-                peerItem.textContent = `${name} (${id})`;
+                peerItem.classList.add(peerStatus[id] ? 'online' : 'offline');
+                peerItem.innerHTML = `${encodeHTML(name)} (${encodeHTML(id)}) - ${peerStatus[id] ? 'Online' : 'Offline'}`;
                 peerItem.addEventListener('click', () => {
                     remoteIdInput.value = id;
                     peerNameInput.value = name;
                     connectButton.click();
                 });
                 peerList.appendChild(peerItem);
+            }
+        }
+
+        // Check peer online status
+        function checkPeerStatus() {
+            if (!isOnline || !peer) return;
+            for (const id in knownPeers) {
+                if (id !== myPeerId && (!conn || conn.peer !== id)) {
+                    const tempConn = peer.connect(id, { metadata: { name: currentUser, ping: true } });
+                    tempConn.on('open', () => {
+                        peerStatus[id] = true;
+                        tempConn.close();
+                        updatePeerList();
+                    });
+                    tempConn.on('error', () => {
+                        peerStatus[id] = false;
+                        updatePeerList();
+                    });
+                } else if (conn && conn.peer === id && conn.open) {
+                    peerStatus[id] = true;
+                } else {
+                    peerStatus[id] = false;
+                }
             }
         }
 
@@ -379,9 +424,10 @@
             messageInput.disabled = false; // Always allow input
             sendButton.disabled = false; // Always allow sending (saves locally if offline)
             if (!isOnline) {
-                addMessage('You are offline. You can still write messages to view later.', 'System', false);
+                addMessage('You are offline. You can still write messages to save locally.', 'System', false);
             } else {
                 addMessage('You are back online!', 'System', false);
+                checkPeerStatus();
             }
         }
 
@@ -396,6 +442,7 @@
                 console.log('Peer ID:', id);
                 loadMessages();
                 updatePeerList();
+                setInterval(checkPeerStatus, 30000); // Check every 30 seconds
             });
         } else {
             peerIdInput.value = myPeerId;
@@ -408,6 +455,12 @@
         // Handle incoming connections
         if (peer) {
             peer.on('connection', (connection) => {
+                if (connection.metadata?.ping) {
+                    peerStatus[connection.peer] = true;
+                    connection.close();
+                    updatePeerList();
+                    return;
+                }
                 conn = connection;
                 setupConnection();
                 const peerName = conn.metadata?.name || 'Unknown';
@@ -425,7 +478,7 @@
                 return;
             }
             const remoteId = remoteIdInput.value.trim();
-            const peerName = peerNameInput.value.trim() || 'Unknown';
+            const peerName = encodeHTML(peerNameInput.value.trim()) || 'Unknown';
             if (remoteId && remoteId !== myPeerId) {
                 conn = peer.connect(remoteId, { metadata: { name: currentUser } });
                 if (!knownPeers[remoteId] || knownPeers[remoteId] === 'Unknown') {
@@ -447,6 +500,7 @@
                 connectButton.disabled = false;
                 disconnectButton.style.display = 'none';
                 addMessage('You disconnected from the peer', 'System', false);
+                checkPeerStatus();
             }
         });
 
@@ -459,6 +513,8 @@
                 connectButton.disabled = true;
                 disconnectButton.style.display = 'inline-block';
                 addMessage('Connected to peer!', 'System', false);
+                peerStatus[conn.peer] = true;
+                updatePeerList();
                 if (conn.metadata?.name) {
                     knownPeers[conn.peer] = conn.metadata.name;
                     localStorage.setItem('knownPeers', JSON.stringify(knownPeers));
@@ -478,11 +534,15 @@
                 connectButton.disabled = false;
                 disconnectButton.style.display = 'none';
                 addMessage('Peer disconnected', 'System', false);
+                peerStatus[conn.peer] = false;
+                updatePeerList();
             });
 
             conn.on('error', (err) => {
                 console.error('Connection error:', err);
                 status.textContent = 'Error: ' + err.message;
+                peerStatus[conn.peer] = false;
+                updatePeerList();
             });
         }
 
@@ -524,8 +584,15 @@
                     peerIdInput.value = id;
                     updateStatus();
                     updatePeerList();
+                    setInterval(checkPeerStatus, 30000); // Check every 30 seconds
                 });
                 peer.on('connection', (connection) => {
+                    if (connection.metadata?.ping) {
+                        peerStatus[connection.peer] = true;
+                        connection.close();
+                        updatePeerList();
+                        return;
+                    }
                     conn = connection;
                     setupConnection();
                 });
