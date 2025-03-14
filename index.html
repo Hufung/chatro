@@ -34,6 +34,15 @@
             font-size: 1.5em;
             font-weight: 600;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #username-input {
+            padding: 5px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1em;
         }
         .chat-messages {
             flex: 1;
@@ -48,7 +57,6 @@
             border-radius: 10px;
             max-width: 70%;
             animation: slideIn 0.3s ease;
-            position: relative;
         }
         @keyframes slideIn {
             from { transform: translateY(20px); opacity: 0; }
@@ -178,6 +186,7 @@
     <div class="chat-container">
         <div class="chat-header">
             <h2>PeerJS Chat</h2>
+            <input type="text" id="username-input" placeholder="Set your username">
         </div>
         <div class="status" id="status">Disconnected</div>
         <div class="chat-messages" id="chat-messages"></div>
@@ -230,9 +239,23 @@
         const disconnectButton = document.getElementById('disconnect-button');
         const copyButton = document.getElementById('copy-button');
         const peerList = document.getElementById('peer-list');
+        const usernameInput = document.getElementById('username-input');
 
-        // Random display name
-        const currentUser = `User_${Math.random().toString(36).substr(2, 5)}`;
+        // Load or set username from localStorage
+        let currentUser = localStorage.getItem('chatUsername') || '';
+        if (!currentUser) {
+            currentUser = `User_${Math.random().toString(36).substr(2, 5)}`;
+            localStorage.setItem('chatUsername', currentUser);
+        }
+        usernameInput.value = currentUser;
+
+        // Update username on input change
+        usernameInput.addEventListener('change', () => {
+            currentUser = usernameInput.value.trim() || `User_${Math.random().toString(36).substr(2, 5)}`;
+            localStorage.setItem('chatUsername', currentUser);
+            addMessage(`Username updated to "${currentUser}"`, 'System', false);
+        });
+
         let peer;
         let conn;
 
@@ -310,7 +333,9 @@
             const peerName = peerNameInput.value.trim() || 'Unknown';
             if (remoteId && remoteId !== myPeerId) {
                 conn = peer.connect(remoteId, { metadata: { name: currentUser } });
-                knownPeers[remoteId] = peerName;
+                if (!knownPeers[remoteId] || knownPeers[remoteId] === 'Unknown') {
+                    knownPeers[remoteId] = peerName;
+                }
                 localStorage.setItem('knownPeers', JSON.stringify(knownPeers));
                 setupConnection();
                 updatePeerList();
