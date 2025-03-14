@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Local Multi-Tab Chat App</title>
+    <title>WebRTC Chat App</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -26,7 +26,7 @@
             text-align: center;
         }
         .chat-messages {
-            height: 400px;
+            height: 300px;
             overflow-y: auto;
             padding: 20px;
         }
@@ -72,18 +72,33 @@
             text-align: center;
             color: #666;
         }
+        .connection-controls {
+            padding: 10px;
+            border-top: 1px solid #ddd;
+        }
+        textarea {
+            width: 100%;
+            height: 80px;
+            margin: 5px 0;
+        }
     </style>
 </head>
 <body>
     <div class="chat-container">
         <div class="chat-header">
-            <h2>Chat App</h2>
+            <h2>WebRTC Chat App</h2>
         </div>
-        <div class="status" id="status">Connected</div>
+        <div class="status" id="status">Disconnected</div>
         <div class="chat-messages" id="chat-messages"></div>
         <div class="chat-input">
-            <input type="text" id="message-input" placeholder="Type a message...">
-            <button id="send-button">Send</button>
+            <input type="text" id="message-input" placeholder="Type a message..." disabled>
+            <button id="send-button" disabled>Send</button>
+        </div>
+        <div class="connection-controls">
+            <button id="start-button">Create Offer</button>
+            <textarea id="offer" placeholder="Your offer (share this with the other user)"></textarea>
+            <textarea id="answer" placeholder="Paste the other user's offer/answer here"></textarea>
+            <button id="connect-button">Connect with Answer</button>
         </div>
     </div>
 
@@ -93,14 +108,22 @@
         const messageInput = document.getElementById('message-input');
         const sendButton = document.getElementById('send-button');
         const status = document.getElementById('status');
+        const startButton = document.getElementById('start-button');
+        const offerTextarea = document.getElementById('offer');
+        const answerTextarea = document.getElementById('answer');
+        const connectButton = document.getElementById('connect-button');
 
-        // Random user ID for this tab
+        // WebRTC setup
+        const configuration = {
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] // Free STUN server
+        };
+        let peerConnection;
+        let dataChannel;
+
+        // Random user ID
         const currentUser = `User_${Math.random().toString(36).substr(2, 5)}`;
 
-        // Load messages from localStorage or initialize empty array
-        let messages = JSON.parse(localStorage.getItem('chatMessages')) || [];
-
-        // Add message to chat and localStorage
+        // Add message to chat
         function addMessage(text, sender, isSent) {
             const messageDiv = document.createElement('div');
             messageDiv.classList.add('message');
@@ -109,39 +132,87 @@
             messageDiv.innerHTML = `<strong>${sender}</strong> (${time}): ${text}`;
             chatMessages.appendChild(messageDiv);
             chatMessages.scrollTop = chatMessages.scrollHeight;
-
-            // Update messages array and localStorage
-            messages.push({ text, sender, time });
-            localStorage.setItem('chatMessages', JSON.stringify(messages));
         }
 
-        // Load existing messages on page load
-        function loadMessages() {
-            chatMessages.innerHTML = ''; // Clear current display
-            messages = JSON.parse(localStorage.getItem('chatMessages')) || [];
-            messages.forEach(msg => {
-                const isSent = msg.sender === currentUser;
-                addMessage(msg.text, msg.sender, isSent);
-            });
-        }
-
-        // Send message
+        // Send message via data channel
         function sendMessage() {
             const text = messageInput.value.trim();
-            if (text) {
+            if (text && dataChannel && dataChannel.readyState === 'open') {
+                dataChannel.send(JSON.stringify({ sender: currentUser, text }));
                 addMessage(text, currentUser, true);
                 messageInput.value = '';
             }
         }
 
-        // Listen for storage events (updates from other tabs)
-        window.addEventListener('storage', (event) => {
-            if (event.key === 'chatMessages') {
-                loadMessages();
-            }
+        // Create offer (User A)
+        startButton.addEventListener('click', async () => {
+            peerConnection = new RTCPeerConnection(configuration);
+            dataChannel = peerConnection.createDataChannel('chat');
+
+            dataChannel.onopen = () => {
+                status.textContent = 'Connected';
+                messageInput.disabled = false;
+                sendButton.disabled = false;
+                startButton.disabled = true;
+                connectButton.disabled = true;
+            };
+            dataChannel.onmessage = (event) => {
+                const { sender, text } = JSON.parse(event.data);
+                addMessage(text, sender, false);
+            };
+            dataChannel.onclose = () => {
+                status.textContent = 'Disconnected';
+                messageInput.disabled = true;
+                sendButton.disabled = true;
+            };
+
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate === null) {
+                    offerTextarea.value = JSON.stringify(peerConnection.localDescription);
+                }
+            };
+
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
         });
 
-        // Event listeners
+        // Connect with answer (User B)
+        connectButton.addEventListener('click', async () => {
+            const remoteOffer = JSON.parse(answerTextarea.value);
+            peerConnection = new RTCPeerConnection(configuration);
+
+            peerConnection.ondatachannel = (event) => {
+                dataChannel = event.channel;
+                dataChannel.onopen = () => {
+                    status.textContent = 'Connected';
+                    messageInput.disabled = false;
+                    sendButton.disabled = false;
+                    startButton.disabled = true;
+                    connectButton.disabled = true;
+                };
+                dataChannel.onmessage = (event) => {
+                    const { sender, text } = JSON.parse(event.data);
+                    addMessage(text, sender, false);
+                };
+                dataChannel.onclose = () => {
+                    status.textContent = 'Disconnected';
+                    messageInput.disabled = true;
+                    sendButton.disabled = true;
+                };
+            };
+
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate === null) {
+                    offerTextarea.value = JSON.stringify(peerConnection.localDescription);
+                }
+            };
+
+            await peerConnection.setRemoteDescription(remoteOffer);
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+        });
+
+        // Event listeners for sending messages
         sendButton.addEventListener('click', sendMessage);
         messageInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
@@ -149,12 +220,8 @@
             }
         });
 
-        // Initial setup
-        if (messages.length === 0) {
-            addMessage('Welcome to the chat! Open another tab to chat with yourself.', 'System', false);
-        } else {
-            loadMessages();
-        }
+        // Initial message
+        addMessage('1. User A: Click "Create Offer". 2. User B: Paste offer and click "Connect with Answer". 3. User A: Paste answer.', 'System', false);
     </script>
 </body>
 </html>
