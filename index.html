@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Firebase Chat App</title>
+    <title>Supabase Chat App</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -98,27 +98,15 @@
         </div>
     </div>
 
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
+    <!-- Supabase Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <script>
-        // Your Firebase configuration (get this from Firebase Console)
-        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyABd3vYIx6eCIb_SZBjdtLUu8U0Bl1kRPM",
-  authDomain: "chatro7177.firebaseapp.com",
-  projectId: "chatro7177",
-  storageBucket: "chatro7177.firebasestorage.app",
-  messagingSenderId: "510867151216",
-  appId: "1:510867151216:web:d2d024228d3d4518f817b5",
-  measurementId: "G-MMSMM11DRX"
-};
-
-        // Initialize Firebase
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
-        const chatRef = db.ref('chat');
+        // Initialize Supabase (replace with your credentials)
+        const supabase = Supabase.createClient(
+            'YOUR_SUPABASE_URL', // e.g., https://your-project-id.supabase.co
+            'YOUR_ANON_KEY'      // From Supabase API settings
+        );
 
         // DOM elements
         const chatMessages = document.getElementById('chat-messages');
@@ -143,25 +131,40 @@ const firebaseConfig = {
         }
 
         // Send message
-        function sendMessage() {
+        async function sendMessage() {
             const text = messageInput.value.trim();
             if (text) {
-                chatRef.push({
-                    sender: currentUser,
-                    text: text,
-                    timestamp: firebase.database.ServerValue.TIMESTAMP
-                });
-                messageInput.value = '';
+                try {
+                    const { error } = await supabase
+                        .from('messages')
+                        .insert({ sender: currentUser, text });
+                    
+                    if (error) throw error;
+                    messageInput.value = '';
+                } catch (error) {
+                    console.error('Error sending message:', error);
+                    status.textContent = 'Error sending message';
+                }
             }
         }
 
         // Listen for new messages
-        chatRef.on('child_added', (snapshot) => {
-            const message = snapshot.val();
-            const isSent = message.sender === currentUser;
-            addMessage(message.text, message.sender, isSent);
-            status.textContent = 'Connected';
-        });
+        supabase
+            .channel('public:messages')
+            .on('postgres_changes', 
+                { event: 'INSERT', schema: 'public', table: 'messages' },
+                (payload) => {
+                    const message = payload.new;
+                    const isSent = message.sender === currentUser;
+                    addMessage(message.text, message.sender, isSent);
+                }
+            )
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    document.getElementById('status').textContent = 'Connected';
+                    addMessage('Welcome to the chat!', 'System', false);
+                }
+            });
 
         // Event listeners
         sendButton.addEventListener('click', sendMessage);
@@ -170,10 +173,6 @@ const firebaseConfig = {
                 sendMessage();
             }
         });
-
-        // Initial message
-        status.textContent = 'Connected';
-        addMessage('Welcome to the chat!', 'System', false);
     </script>
 </body>
 </html>
