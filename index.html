@@ -229,10 +229,10 @@
             <h2>PeerJS Chat</h2>
             <input type="text" id="username-input" placeholder="Set your username">
         </div>
-        <div class="status" id="status">Disconnected</div>
+        <div class="status" id="status">Checking connection...</div>
         <div class="chat-messages" id="chat-messages"></div>
         <div class="chat-input">
-            <input type="text" id="message-input" placeholder="Type a message..." disabled>
+            <input type="text" id="message-input" placeholder="Type a message...">
             <button id="send-button">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
                     <line x1="22" y1="2" x2="11" y2="13"></line>
@@ -290,15 +290,19 @@
         }
         usernameInput.value = currentUser;
 
+        // Load messages from localStorage
+        let messages = JSON.parse(localStorage.getItem('chatMessages')) || [];
+
+        let peer;
+        let conn;
+        let isOnline = navigator.onLine;
+
         // Update username on input change
         usernameInput.addEventListener('change', () => {
             currentUser = usernameInput.value.trim() || `User_${Math.random().toString(36).substr(2, 5)}`;
             localStorage.setItem('chatUsername', currentUser);
             addMessage(`Username updated to "${currentUser}"`, 'System', false);
         });
-
-        let peer;
-        let conn;
 
         // Load or generate persistent PeerJS ID
         let myPeerId = localStorage.getItem('myPeerId');
@@ -310,7 +314,7 @@
         // Load peer list from localStorage
         let knownPeers = JSON.parse(localStorage.getItem('knownPeers')) || {};
 
-        // Add message to chat
+        // Add message to chat and localStorage
         function addMessage(text, sender, isSent) {
             const messageDiv = document.createElement('div');
             messageDiv.classList.add('message');
@@ -319,14 +323,33 @@
             messageDiv.innerHTML = `<strong>${sender}</strong> (${time}): ${text}`;
             chatMessages.appendChild(messageDiv);
             chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            messages.push({ text, sender, time, isSent });
+            localStorage.setItem('chatMessages', JSON.stringify(messages));
         }
 
-        // Send message via PeerJS connection
+        // Load existing messages
+        function loadMessages() {
+            messages = JSON.parse(localStorage.getItem('chatMessages')) || [];
+            chatMessages.innerHTML = '';
+            messages.forEach(msg => {
+                addMessage(msg.text, msg.sender, msg.isSent);
+            });
+        }
+
+        // Send message
         function sendMessage() {
             const text = messageInput.value.trim();
-            if (text && conn && conn.open) {
-                conn.send(JSON.stringify({ sender: currentUser, text }));
-                addMessage(text, currentUser, true);
+            if (text) {
+                if (isOnline && conn && conn.open) {
+                    conn.send(JSON.stringify({ sender: currentUser, text }));
+                    addMessage(text, currentUser, true);
+                } else {
+                    addMessage(text, currentUser, true); // Save locally when offline
+                    if (!isOnline) {
+                        addMessage('You are offline. Message saved locally.', 'System', false);
+                    }
+                }
                 messageInput.value = '';
             }
         }
@@ -347,30 +370,60 @@
             }
         }
 
-        // Initialize PeerJS with persistent ID
-        peer = new Peer(myPeerId);
-        peer.on('open', (id) => {
-            peerIdInput.value = id;
-            status.textContent = 'Your Peer ID: ' + id + ' (Share this)';
-            addMessage('Welcome! Please set your username in the header above.', 'System', false);
-            addMessage('Share your Peer ID with someone to chat!', 'System', false);
-            console.log('Peer ID:', id);
+        // Update online/offline status
+        function updateStatus() {
+            isOnline = navigator.onLine;
+            status.textContent = isOnline ? 'Online' : 'Offline';
+            connectButton.disabled = !isOnline || (conn && conn.open);
+            disconnectButton.style.display = (isOnline && conn && conn.open) ? 'inline-block' : 'none';
+            messageInput.disabled = false; // Always allow input
+            sendButton.disabled = false; // Always allow sending (saves locally if offline)
+            if (!isOnline) {
+                addMessage('You are offline. You can still write messages to view later.', 'System', false);
+            } else {
+                addMessage('You are back online!', 'System', false);
+            }
+        }
+
+        // Initialize PeerJS with persistent ID (if online)
+        if (isOnline) {
+            peer = new Peer(myPeerId);
+            peer.on('open', (id) => {
+                peerIdInput.value = id;
+                status.textContent = 'Online';
+                addMessage('Welcome! Please set your username in the header above.', 'System', false);
+                addMessage('Share your Peer ID with someone to chat!', 'System', false);
+                console.log('Peer ID:', id);
+                loadMessages();
+                updatePeerList();
+            });
+        } else {
+            peerIdInput.value = myPeerId;
+            status.textContent = 'Offline';
+            addMessage('You are offline. Set your username and write messages to save locally.', 'System', false);
+            loadMessages();
             updatePeerList();
-        });
+        }
 
         // Handle incoming connections
-        peer.on('connection', (connection) => {
-            conn = connection;
-            setupConnection();
-            const peerName = conn.metadata?.name || 'Unknown';
-            knownPeers[conn.peer] = peerName;
-            localStorage.setItem('knownPeers', JSON.stringify(knownPeers));
-            updatePeerList();
-            addMessage(`Incoming connection from ${peerName} (${conn.peer})`, 'System', false);
-        });
+        if (peer) {
+            peer.on('connection', (connection) => {
+                conn = connection;
+                setupConnection();
+                const peerName = conn.metadata?.name || 'Unknown';
+                knownPeers[conn.peer] = peerName;
+                localStorage.setItem('knownPeers', JSON.stringify(knownPeers));
+                updatePeerList();
+                addMessage(`Incoming connection from ${peerName} (${conn.peer})`, 'System', false);
+            });
+        }
 
         // Connect to another peer
         connectButton.addEventListener('click', () => {
+            if (!isOnline) {
+                addMessage('Cannot connect while offline.', 'System', false);
+                return;
+            }
             const remoteId = remoteIdInput.value.trim();
             const peerName = peerNameInput.value.trim() || 'Unknown';
             if (remoteId && remoteId !== myPeerId) {
@@ -388,9 +441,9 @@
         disconnectButton.addEventListener('click', () => {
             if (conn && conn.open) {
                 conn.close();
-                status.textContent = 'Disconnected';
-                messageInput.disabled = true;
-                sendButton.disabled = true;
+                status.textContent = 'Online';
+                messageInput.disabled = false;
+                sendButton.disabled = false;
                 connectButton.disabled = false;
                 disconnectButton.style.display = 'none';
                 addMessage('You disconnected from the peer', 'System', false);
@@ -419,9 +472,9 @@
             });
 
             conn.on('close', () => {
-                status.textContent = 'Disconnected';
-                messageInput.disabled = true;
-                sendButton.disabled = true;
+                status.textContent = 'Online';
+                messageInput.disabled = false;
+                sendButton.disabled = false;
                 connectButton.disabled = false;
                 disconnectButton.style.display = 'none';
                 addMessage('Peer disconnected', 'System', false);
@@ -455,10 +508,42 @@
         });
 
         // Handle PeerJS errors
-        peer.on('error', (err) => {
-            console.error('PeerJS error:', err);
-            status.textContent = 'Error: ' + err.type;
+        if (peer) {
+            peer.on('error', (err) => {
+                console.error('PeerJS error:', err);
+                status.textContent = 'Error: ' + err.type;
+            });
+        }
+
+        // Online/offline event listeners
+        window.addEventListener('online', () => {
+            isOnline = true;
+            if (!peer) {
+                peer = new Peer(myPeerId);
+                peer.on('open', (id) => {
+                    peerIdInput.value = id;
+                    updateStatus();
+                    updatePeerList();
+                });
+                peer.on('connection', (connection) => {
+                    conn = connection;
+                    setupConnection();
+                });
+            }
+            updateStatus();
         });
+
+        window.addEventListener('offline', () => {
+            isOnline = false;
+            if (conn) conn.close();
+            if (peer) peer.destroy();
+            peer = null;
+            conn = null;
+            updateStatus();
+        });
+
+        // Initial load
+        loadMessages();
     </script>
 </body>
 </html>
