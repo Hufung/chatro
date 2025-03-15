@@ -133,7 +133,7 @@
             border-color: #075e54;
             outline: none;
         }
-        #send-button, #call-button, #end-call-button {
+        #send-button, #call-button, #end-call-button, #file-button {
             padding: 10px 15px;
             background: #075e54;
             color: white;
@@ -142,7 +142,7 @@
             cursor: pointer;
             transition: background 0.3s;
         }
-        #send-button:hover, #call-button:hover, #end-call-button:hover {
+        #send-button:hover, #call-button:hover, #end-call-button:hover, #file-button:hover {
             background: #054d44;
         }
         #end-call-button {
@@ -151,6 +151,9 @@
         }
         #end-call-button:hover {
             background: #d32f2f;
+        }
+        #file-input {
+            display: none;
         }
         .status {
             padding: 8px;
@@ -270,7 +273,7 @@
             #message-input {
                 margin-right: 5px;
             }
-            #send-button, #call-button, #end-call-button {
+            #send-button, #call-button, #end-call-button, #file-button {
                 padding: 8px 12px;
             }
             .connection-controls {
@@ -301,6 +304,8 @@
                     <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
                 </svg>
             </button>
+            <button id="file-button">Send File</button>
+            <input type="file" id="file-input" accept="*/*">
             <button id="call-button">Start Call</button>
             <button id="end-call-button">End Call</button>
         </div>
@@ -337,6 +342,8 @@
         const chatMessages = document.getElementById('chat-messages');
         const messageInput = document.getElementById('message-input');
         const sendButton = document.getElementById('send-button');
+        const fileButton = document.getElementById('file-button');
+        const fileInput = document.getElementById('file-input');
         const callButton = document.getElementById('call-button');
         const endCallButton = document.getElementById('end-call-button');
         const status = document.getElementById('status');
@@ -345,7 +352,7 @@
         const peerNameInput = document.getElementById('peer-name');
         const connectButton = document.getElementById('connect-button');
         const disconnectButton = document.getElementById('disconnect-button');
-        const copyButton = document.getElementById('copy-button');
+        const copyButton = document.getElementByTensorId('copy-button');
         const peerList = document.getElementById('peer-list');
         const usernameInput = document.getElementById('username-input');
         const themeToggle = document.getElementById('theme-toggle');
@@ -406,16 +413,33 @@
         let knownPeers = JSON.parse(localStorage.getItem('knownPeers')) || {};
 
         // Add message to chat and localStorage
-        function addMessage(text, sender, isSent, verified = true) {
+        function addMessage(text, sender, isSent, verified = true, isFile = false, fileData = null, fileName = '') {
             const messageDiv = document.createElement('div');
             messageDiv.classList.add('message');
             messageDiv.classList.add(isSent ? 'sent' : 'received');
             const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            messageDiv.innerHTML = `<strong>${encodeHTML(sender)}</strong> (${encodeHTML(time)}): ${encodeHTML(text)}${!verified ? ' [Integrity check failed]' : ''}`;
+            if (isFile && fileData) {
+                if (fileName.match(/\.(jpg|jpeg|png|gif)$/i)) {
+                    const img = document.createElement('img');
+                    img.src = fileData;
+                    img.style.maxWidth = '100%';
+                    messageDiv.appendChild(img);
+                    messageDiv.innerHTML += `<br><strong>${encodeHTML(sender)}</strong> (${encodeHTML(time)}): Sent image "${encodeHTML(fileName)}"`;
+                } else {
+                    const link = document.createElement('a');
+                    link.href = fileData;
+                    link.download = fileName;
+                    link.textContent = `Download ${encodeHTML(fileName)}`;
+                    messageDiv.appendChild(link);
+                    messageDiv.innerHTML += `<br><strong>${encodeHTML(sender)}</strong> (${encodeHTML(time)}): Sent file`;
+                }
+            } else {
+                messageDiv.innerHTML = `<strong>${encodeHTML(sender)}</strong> (${encodeHTML(time)}): ${encodeHTML(text)}${!verified ? ' [Integrity check failed]' : ''}`;
+            }
             chatMessages.appendChild(messageDiv);
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
-            messages.push({ text, sender, time, isSent });
+            messages.push({ text: isFile ? `Sent file: ${fileName}` : text, sender, time, isSent, isFile });
             localStorage.setItem('chatMessages', JSON.stringify(messages));
         }
 
@@ -433,12 +457,12 @@
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
-        // Send message with SHA-256 hash
+        // Send text message with SHA-256 hash
         async function sendMessage() {
             const text = messageInput.value.trim();
             if (text) {
                 const hash = await sha256(text);
-                const data = JSON.stringify({ sender: currentUser, text, hash });
+                const data = JSON.stringify({ type: 'text', sender: currentUser, text, hash });
                 if (isOnline && conn && conn.open) {
                     conn.send(data);
                     addMessage(text, currentUser, true);
@@ -451,6 +475,48 @@
                 messageInput.value = '';
             }
         }
+
+        // Send file
+        async function sendFile(file) {
+            const reader = new FileReader();
+            reader.onload = async () => {
+                const fileData = reader.result; // ArrayBuffer
+                const fileName = file.name;
+                const hash = await sha256(fileData); // Hash the file content
+                const data = JSON.stringify({ 
+                    type: 'file', 
+                    sender: currentUser, 
+                    fileName, 
+                    fileData: Array.from(new Uint8Array(fileData)), // Convert to array for JSON
+                    hash 
+                });
+                if (isOnline && conn && conn.open) {
+                    conn.send(data);
+                    addMessage(`Sent file: ${fileName}`, currentUser, true, true, true, URL.createObjectURL(file), fileName);
+                    addMessage('File sent successfully!', 'System', false);
+                } else {
+                    addMessage(`File "${fileName}" saved locally (offline).`, currentUser, true, true, true, URL.createObjectURL(file), fileName);
+                    if (!isOnline) {
+                        addMessage('You are offline. File saved locally.', 'System', false);
+                    }
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Handle file input change
+        fileInput.addEventListener('change', () => {
+            const file = fileInput.files[0];
+            if (file) {
+                sendFile(file);
+                fileInput.value = ''; // Reset input
+            }
+        });
+
+        // Trigger file input click
+        fileButton.addEventListener('click', () => {
+            fileInput.click();
+        });
 
         // Start audio call with noise reduction
         async function startCall() {
@@ -564,10 +630,11 @@
             disconnectButton.style.display = (isOnline && conn && conn.open) ? 'inline-block' : 'none';
             messageInput.disabled = false;
             sendButton.disabled = false;
+            fileButton.disabled = !isOnline || !conn || !conn.open;
             callButton.disabled = !isOnline || !conn || !conn.open || (call && call.open);
             endCallButton.style.display = (call && call.open) ? 'inline-block' : 'none';
             if (!isOnline) {
-                addMessage('You are offline. You can still write messages to save locally.', 'System', false);
+                addMessage('You are offline. You can still write messages or save files locally.', 'System', false);
             } else {
                 addMessage('You are back online!', 'System', false);
                 checkPeerStatus();
@@ -630,7 +697,7 @@
         } else {
             peerIdInput.value = myPeerId;
             status.textContent = 'Offline';
-            addMessage('You are offline. Set your username and write messages to save locally.', 'System', false);
+            addMessage('You are offline. Set your username and write messages or save files locally.', 'System', false);
             loadMessages();
             updatePeerList();
         }
@@ -681,6 +748,7 @@
                 status.textContent = 'Online';
                 messageInput.disabled = false;
                 sendButton.disabled = false;
+                fileButton.disabled = false;
                 callButton.disabled = false;
                 connectButton.disabled = false;
                 disconnectButton.style.display = 'none';
@@ -695,6 +763,7 @@
                 status.textContent = 'Connected to ' + conn.peer;
                 messageInput.disabled = false;
                 sendButton.disabled = false;
+                fileButton.disabled = false;
                 callButton.disabled = false;
                 connectButton.disabled = true;
                 disconnectButton.style.display = 'inline-block';
@@ -709,12 +778,28 @@
             });
 
             conn.on('data', async (data) => {
-                const { sender, text, hash } = JSON.parse(data);
-                const computedHash = await sha256(text);
-                const isVerified = computedHash === hash;
-                addMessage(text, sender, false, isVerified);
-                if (!isVerified) {
-                    addMessage('Warning: Message integrity check failed!', 'System', false);
+                const parsedData = JSON.parse(data);
+                if (parsedData.type === 'text') {
+                    const { sender, text, hash } = parsedData;
+                    const computedHash = await sha256(text);
+                    const isVerified = computedHash === hash;
+                    addMessage(text, sender, false, isVerified);
+                    if (!isVerified) {
+                        addMessage('Warning: Message integrity check failed!', 'System', false);
+                    }
+                } else if (parsedData.type === 'file') {
+                    const { sender, fileName, fileData, hash } = parsedData;
+                    const fileBuffer = new Uint8Array(fileData).buffer;
+                    const computedHash = await sha256(fileBuffer);
+                    const isVerified = computedHash === hash;
+                    const blob = new Blob([fileBuffer], { type: 'application/octet-stream' });
+                    const url = URL.createObjectURL(blob);
+                    addMessage(`Received file: ${fileName}`, sender, false, isVerified, true, url, fileName);
+                    if (!isVerified) {
+                        addMessage('Warning: File integrity check failed!', 'System', false);
+                    } else {
+                        addMessage('File received successfully!', 'System', false);
+                    }
                 }
             });
 
@@ -722,6 +807,7 @@
                 status.textContent = 'Online';
                 messageInput.disabled = false;
                 sendButton.disabled = false;
+                fileButton.disabled = false;
                 callButton.disabled = false;
                 connectButton.disabled = false;
                 disconnectButton.style.display = 'none';
