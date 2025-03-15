@@ -19,6 +19,8 @@
             --status-text: #555;
             --shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
             --peer-list-bg: #fafafa;
+            --download-button-bg: #4CAF50;
+            --download-button-hover: #45a049;
         }
         [data-theme="dark"] {
             --bg-body: linear-gradient(135deg, #2c2c2c, #3e3e3e);
@@ -34,6 +36,8 @@
             --status-text: #bbb;
             --shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
             --peer-list-bg: #252525;
+            --download-button-bg: #388E3C;
+            --download-button-hover: #2e7d32;
         }
         body {
             font-family: 'Segoe UI', Arial, sans-serif;
@@ -154,6 +158,20 @@
         }
         #file-input {
             display: none;
+        }
+        .download-button {
+            padding: 5px 10px;
+            background: var(--download-button-bg);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 5px;
+            display: inline-block;
+            transition: background 0.3s;
+        }
+        .download-button:hover {
+            background: var(--download-button-hover);
         }
         .status {
             padding: 8px;
@@ -380,11 +398,11 @@
         // Encode text to prevent XSS
         function encodeHTML(text) {
             return text
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
+                .replace(/&/g, '&')
+                .replace(/</g, '<')
+                .replace(/>/g, '>')
+                .replace(/"/g, '"')
+                .replace(/'/g, ''');
         }
 
         // SHA-256 hashing function
@@ -426,13 +444,20 @@
                     messageDiv.appendChild(img);
                     messageDiv.innerHTML += `<br><strong>${encodeHTML(sender)}</strong> (${encodeHTML(time)}): Sent image "${encodeHTML(fileName)}"`;
                 } else {
+                    messageDiv.innerHTML = `<strong>${encodeHTML(sender)}</strong> (${encodeHTML(time)}): Sent file "${encodeHTML(fileName)}"`;
+                }
+                const downloadButton = document.createElement('button');
+                downloadButton.classList.add('download-button');
+                downloadButton.textContent = 'Download';
+                downloadButton.onclick = () => {
                     const link = document.createElement('a');
                     link.href = fileData;
                     link.download = fileName;
-                    link.textContent = `Download ${encodeHTML(fileName)}`;
-                    messageDiv.appendChild(link);
-                    messageDiv.innerHTML += `<br><strong>${encodeHTML(sender)}</strong> (${encodeHTML(time)}): Sent file`;
-                }
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                };
+                messageDiv.appendChild(downloadButton);
             } else {
                 messageDiv.innerHTML = `<strong>${encodeHTML(sender)}</strong> (${encodeHTML(time)}): ${encodeHTML(text)}${!verified ? ' [Integrity check failed]' : ''}`;
             }
