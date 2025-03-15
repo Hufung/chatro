@@ -380,6 +380,14 @@
                 .replace(/'/g, '&#39;');
         }
 
+        // SHA-256 hashing function
+        async function sha256(message) {
+            const msgBuffer = new TextEncoder().encode(message);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
         // Update username on input change
         usernameInput.addEventListener('change', () => {
             currentUser = encodeHTML(usernameInput.value.trim()) || `User_${Math.random().toString(36).substr(2, 5)}`;
@@ -398,12 +406,12 @@
         let knownPeers = JSON.parse(localStorage.getItem('knownPeers')) || {};
 
         // Add message to chat and localStorage
-        function addMessage(text, sender, isSent) {
+        function addMessage(text, sender, isSent, verified = true) {
             const messageDiv = document.createElement('div');
             messageDiv.classList.add('message');
             messageDiv.classList.add(isSent ? 'sent' : 'received');
             const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            messageDiv.innerHTML = `<strong>${encodeHTML(sender)}</strong> (${encodeHTML(time)}): ${encodeHTML(text)}`;
+            messageDiv.innerHTML = `<strong>${encodeHTML(sender)}</strong> (${encodeHTML(time)}): ${encodeHTML(text)}${!verified ? ' [Integrity check failed]' : ''}`;
             chatMessages.appendChild(messageDiv);
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
@@ -425,12 +433,14 @@
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
-        // Send message
-        function sendMessage() {
+        // Send message with SHA-256 hash
+        async function sendMessage() {
             const text = messageInput.value.trim();
             if (text) {
+                const hash = await sha256(text);
+                const data = JSON.stringify({ sender: currentUser, text, hash });
                 if (isOnline && conn && conn.open) {
-                    conn.send(JSON.stringify({ sender: currentUser, text }));
+                    conn.send(data);
                     addMessage(text, currentUser, true);
                 } else {
                     addMessage(text, currentUser, true);
@@ -451,13 +461,11 @@
 
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                
-                // Set up Web Audio API for noise reduction
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 sourceNode = audioContext.createMediaStreamSource(localStream);
                 filterNode = audioContext.createBiquadFilter();
-                filterNode.type = 'lowpass'; // Reduce high-frequency noise
-                filterNode.frequency.value = 3000; // Cut off frequencies above 3kHz
+                filterNode.type = 'lowpass';
+                filterNode.frequency.value = 3000;
                 sourceNode.connect(filterNode);
                 filterNode.connect(audioContext.destination);
 
@@ -580,7 +588,6 @@
                 setInterval(checkPeerStatus, 30000);
             });
 
-            // Handle incoming calls
             peer.on('call', (incomingCall) => {
                 navigator.mediaDevices.getUserMedia({ audio: true })
                     .then((stream) => {
@@ -670,7 +677,7 @@
         disconnectButton.addEventListener('click', () => {
             if (conn && conn.open) {
                 conn.close();
-                endCall(); // End call if active
+                endCall();
                 status.textContent = 'Online';
                 messageInput.disabled = false;
                 sendButton.disabled = false;
@@ -701,9 +708,14 @@
                 }
             });
 
-            conn.on('data', (data) => {
-                const { sender, text } = JSON.parse(data);
-                addMessage(text, sender, false);
+            conn.on('data', async (data) => {
+                const { sender, text, hash } = JSON.parse(data);
+                const computedHash = await sha256(text);
+                const isVerified = computedHash === hash;
+                addMessage(text, sender, false, isVerified);
+                if (!isVerified) {
+                    addMessage('Warning: Message integrity check failed!', 'System', false);
+                }
             });
 
             conn.on('close', () => {
@@ -713,7 +725,7 @@
                 callButton.disabled = false;
                 connectButton.disabled = false;
                 disconnectButton.style.display = 'none';
-                endCall(); // End call if active
+                endCall();
                 addMessage('Peer disconnected', 'System', false);
                 peerStatus[conn.peer] = false;
                 updatePeerList();
