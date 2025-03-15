@@ -6,6 +6,7 @@
     <title>Chatro</title>
     <style>
         :root {
+            /* Light mode variables */
             --bg-body: linear-gradient(135deg, #e0e7ff, #f3e8ff);
             --bg-container: white;
             --text-color: #333;
@@ -21,6 +22,7 @@
             --peer-list-bg: #fafafa;
         }
         [data-theme="dark"] {
+            /* Dark mode variables */
             --bg-body: linear-gradient(135deg, #2c2c2c, #3e3e3e);
             --bg-container: #1e1e1e;
             --text-color: #e0e0e0;
@@ -116,13 +118,13 @@
             padding: 10px;
             background: var(--bg-container);
             border-top: var(--msg-received-border);
-            gap: 8px;
         }
         #message-input {
             flex-grow: 1;
             padding: 10px;
             border: var(--input-border);
             border-radius: 20px;
+            margin-right: 8px;
             font-size: clamp(0.9em, 3vw, 1em);
             transition: border-color 0.3s;
             background: var(--input-bg);
@@ -132,7 +134,7 @@
             border-color: #075e54;
             outline: none;
         }
-        #send-button, #share-location {
+        #send-button {
             padding: 10px 15px;
             background: #075e54;
             color: white;
@@ -141,7 +143,7 @@
             cursor: pointer;
             transition: background 0.3s;
         }
-        #send-button:hover, #share-location:hover {
+        #send-button:hover {
             background: #054d44;
         }
         .status {
@@ -240,14 +242,6 @@
         .peer-item:hover {
             background: #e0f7fa;
         }
-        .location-link {
-            color: #2196F3;
-            text-decoration: underline;
-            cursor: pointer;
-        }
-        .location-link:hover {
-            color: #1976D2;
-        }
         @media (max-width: 600px) {
             .chat-container {
                 margin: 10px;
@@ -265,12 +259,11 @@
             }
             .chat-input {
                 padding: 8px;
-                flex-wrap: wrap;
             }
             #message-input {
                 margin-right: 5px;
             }
-            #send-button, #share-location {
+            #send-button {
                 padding: 8px 12px;
             }
             .connection-controls {
@@ -301,7 +294,6 @@
                     <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
                 </svg>
             </button>
-            <button id="share-location">Share Location</button>
         </div>
         <div class="connection-controls">
             <label>Your Peer ID: <input type="text" id="peer-id" readonly></label>
@@ -336,7 +328,6 @@
         const chatMessages = document.getElementById('chat-messages');
         const messageInput = document.getElementById('message-input');
         const sendButton = document.getElementById('send-button');
-        const shareLocationButton = document.getElementById('share-location');
         const status = document.getElementById('status');
         const peerIdInput = document.getElementById('peer-id');
         const remoteIdInput = document.getElementById('remote-id');
@@ -366,11 +357,11 @@
         // Encode text to prevent XSS
         function encodeHTML(text) {
             return text
-                .replace(/&/g, '&')
-                .replace(/</g, '<')
-                .replace(/>/g, '>')
-                .replace(/"/g, '"')
-                .replace(/'/g, ''');
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
         }
 
         // Update username on input change
@@ -391,21 +382,16 @@
         let knownPeers = JSON.parse(localStorage.getItem('knownPeers')) || {};
 
         // Add message to chat and localStorage
-        function addMessage(text, sender, isSent, isLocation = false) {
+        function addMessage(text, sender, isSent) {
             const messageDiv = document.createElement('div');
             messageDiv.classList.add('message');
             messageDiv.classList.add(isSent ? 'sent' : 'received');
             const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            if (isLocation) {
-                const [lat, lon] = text.split(',').map(coord => coord.trim());
-                messageDiv.innerHTML = `<strong>${encodeHTML(sender)}</strong> (${encodeHTML(time)}): <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" class="location-link">My Location: ${encodeHTML(text)}</a>`;
-            } else {
-                messageDiv.innerHTML = `<strong>${encodeHTML(sender)}</strong> (${encodeHTML(time)}): ${encodeHTML(text)}`;
-            }
+            messageDiv.innerHTML = `<strong>${encodeHTML(sender)}</strong> (${encodeHTML(time)}): ${encodeHTML(text)}`;
             chatMessages.appendChild(messageDiv);
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
-            messages.push({ text, sender, time, isSent, isLocation });
+            messages.push({ text, sender, time, isSent });
             localStorage.setItem('chatMessages', JSON.stringify(messages));
         }
 
@@ -417,12 +403,7 @@
                 const messageDiv = document.createElement('div');
                 messageDiv.classList.add('message');
                 messageDiv.classList.add(msg.isSent ? 'sent' : 'received');
-                if (msg.isLocation) {
-                    const [lat, lon] = msg.text.split(',').map(coord => coord.trim());
-                    messageDiv.innerHTML = `<strong>${encodeHTML(msg.sender)}</strong> (${encodeHTML(msg.time)}): <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" class="location-link">My Location: ${encodeHTML(msg.text)}</a>`;
-                } else {
-                    messageDiv.innerHTML = `<strong>${encodeHTML(msg.sender)}</strong> (${encodeHTML(msg.time)}): ${encodeHTML(msg.text)}`;
-                }
+                messageDiv.innerHTML = `<strong>${encodeHTML(msg.sender)}</strong> (${encodeHTML(msg.time)}): ${encodeHTML(msg.text)}`;
                 chatMessages.appendChild(messageDiv);
             });
             chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -443,33 +424,6 @@
                 }
                 messageInput.value = '';
             }
-        }
-
-        // Share location
-        function shareLocation() {
-            if (!navigator.geolocation) {
-                addMessage('Geolocation is not supported by your browser.', 'System', false);
-                return;
-            }
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    const { latitude, longitude } = position.coords;
-                    const locationText = `${latitude}, ${longitude}`;
-                    if (isOnline && conn && conn.open) {
-                        conn.send(JSON.stringify({ sender: currentUser, text: locationText, isLocation: true }));
-                        addMessage(locationText, currentUser, true, true);
-                    } else {
-                        addMessage(locationText, currentUser, true, true);
-                        if (!isOnline) {
-                            addMessage('You are offline. Location saved locally.', 'System', false);
-                        }
-                    }
-                },
-                (error) => {
-                    console.error('Geolocation error:', error);
-                    addMessage('Failed to get location: ' + error.message, 'System', false);
-                }
-            );
         }
 
         // Update peer list UI with online status
@@ -520,9 +474,8 @@
             disconnectButton.style.display = (isOnline && conn && conn.open) ? 'inline-block' : 'none';
             messageInput.disabled = false;
             sendButton.disabled = false;
-            shareLocationButton.disabled = false;
             if (!isOnline) {
-                addMessage('You are offline. You can still write messages or share location to save locally.', 'System', false);
+                addMessage('You are offline. You can still write messages to save locally.', 'System', false);
             } else {
                 addMessage('You are back online!', 'System', false);
                 checkPeerStatus();
@@ -545,7 +498,7 @@
         } else {
             peerIdInput.value = myPeerId;
             status.textContent = 'Offline';
-            addMessage('You are offline. Set your username and write messages or share location to save locally.', 'System', false);
+            addMessage('You are offline. Set your username and write messages to save locally.', 'System', false);
             loadMessages();
             updatePeerList();
         }
@@ -595,7 +548,6 @@
                 status.textContent = 'Online';
                 messageInput.disabled = false;
                 sendButton.disabled = false;
-                shareLocationButton.disabled = false;
                 connectButton.disabled = false;
                 disconnectButton.style.display = 'none';
                 addMessage('You disconnected from the peer', 'System', false);
@@ -609,7 +561,6 @@
                 status.textContent = 'Connected to ' + conn.peer;
                 messageInput.disabled = false;
                 sendButton.disabled = false;
-                shareLocationButton.disabled = false;
                 connectButton.disabled = true;
                 disconnectButton.style.display = 'inline-block';
                 addMessage('Connected to peer!', 'System', false);
@@ -623,15 +574,14 @@
             });
 
             conn.on('data', (data) => {
-                const { sender, text, isLocation } = JSON.parse(data);
-                addMessage(text, sender, false, isLocation || false);
+                const { sender, text } = JSON.parse(data);
+                addMessage(text, sender, false);
             });
 
             conn.on('close', () => {
                 status.textContent = 'Online';
                 messageInput.disabled = false;
                 sendButton.disabled = false;
-                shareLocationButton.disabled = false;
                 connectButton.disabled = false;
                 disconnectButton.style.display = 'none';
                 addMessage('Peer disconnected', 'System', false);
@@ -660,12 +610,13 @@
                 });
         });
 
-        // Event listeners for sending messages and sharing location
+        // Event listeners for sending messages
         sendButton.addEventListener('click', sendMessage);
         messageInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendMessage();
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
         });
-        shareLocationButton.addEventListener('click', shareLocation);
 
         // Handle PeerJS errors
         if (peer) {
