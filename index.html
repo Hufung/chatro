@@ -21,6 +21,8 @@
             --peer-list-bg: #fafafa;
             --download-button-bg: #4CAF50;
             --download-button-hover: #45a049;
+            --clear-button-bg: #f44336;
+            --clear-button-hover: #d32f2f;
         }
         [data-theme="dark"] {
             --bg-body: linear-gradient(135deg, #2c2c2c, #3e3e3e);
@@ -38,6 +40,8 @@
             --peer-list-bg: #252525;
             --download-button-bg: #388E3C;
             --download-button-hover: #2e7d32;
+            --clear-button-bg: #c62828;
+            --clear-button-hover: #b71c1c;
         }
         body {
             font-family: 'Segoe UI', Arial, sans-serif;
@@ -137,7 +141,7 @@
             border-color: #075e54;
             outline: none;
         }
-        #send-button, #call-button, #end-call-button, #file-button {
+        #send-button, #call-button, #end-call-button, #file-button, #clear-button {
             padding: 10px 15px;
             background: #075e54;
             color: white;
@@ -149,12 +153,12 @@
         #send-button:hover, #call-button:hover, #end-call-button:hover, #file-button:hover {
             background: #054d44;
         }
-        #end-call-button {
-            background: #f44336;
-            display: none;
+        #end-call-button, #clear-button {
+            background: var(--clear-button-bg);
+            display: inline-block;
         }
-        #end-call-button:hover {
-            background: #d32f2f;
+        #end-call-button:hover, #clear-button:hover {
+            background: var(--clear-button-hover);
         }
         #file-input {
             display: none;
@@ -291,7 +295,7 @@
             #message-input {
                 margin-right: 5px;
             }
-            #send-button, #call-button, #end-call-button, #file-button {
+            #send-button, #call-button, #end-call-button, #file-button, #clear-button {
                 padding: 8px 12px;
             }
             .connection-controls {
@@ -326,6 +330,7 @@
             <input type="file" id="file-input" accept="*/*">
             <button id="call-button">Start Call</button>
             <button id="end-call-button">End Call</button>
+            <button id="clear-button">Clear Chat</button>
         </div>
         <div class="connection-controls">
             <label>Your Chatro ID: <input type="text" id="peer-id" readonly></label>
@@ -364,6 +369,7 @@
         const fileInput = document.getElementById('file-input');
         const callButton = document.getElementById('call-button');
         const endCallButton = document.getElementById('end-call-button');
+        const clearButton = document.getElementById('clear-button');
         const status = document.getElementById('status');
         const peerIdInput = document.getElementById('peer-id');
         const remoteIdInput = document.getElementById('remote-id');
@@ -398,11 +404,11 @@
         // Encode text to prevent XSS
         function encodeHTML(text) {
             return text
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&apos;');
+                .replace(/&/g, '&')
+                .replace(/</g, '<')
+                .replace(/>/g, '>')
+                .replace(/"/g, '"')
+                .replace(/'/g, ''');
         }
 
         // SHA-256 hashing function
@@ -480,6 +486,14 @@
                 chatMessages.appendChild(messageDiv);
             });
             chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Clear chatroom function
+        function clearChat() {
+            chatMessages.innerHTML = '';
+            messages = [];
+            localStorage.setItem('chatMessages', JSON.stringify(messages));
+            addMessage('Chatroom cleared.', 'System', false);
         }
 
         // Send text message with SHA-256 hash
@@ -870,6 +884,7 @@
         });
         callButton.addEventListener('click', startCall);
         endCallButton.addEventListener('click', endCall);
+        clearButton.addEventListener('click', clearChat);
 
         // Handle PeerJS errors
         if (peer) {
