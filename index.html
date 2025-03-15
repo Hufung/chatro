@@ -6,7 +6,6 @@
     <title>Chatro</title>
     <style>
         :root {
-            /* Light mode variables */
             --bg-body: linear-gradient(135deg, #e0e7ff, #f3e8ff);
             --bg-container: white;
             --text-color: #333;
@@ -22,7 +21,6 @@
             --peer-list-bg: #fafafa;
         }
         [data-theme="dark"] {
-            /* Dark mode variables */
             --bg-body: linear-gradient(135deg, #2c2c2c, #3e3e3e);
             --bg-container: #1e1e1e;
             --text-color: #e0e0e0;
@@ -89,6 +87,7 @@
             overflow-y: auto;
             padding: 15px;
             background: var(--bg-container);
+            position: relative;
         }
         .message {
             margin: 8px 0;
@@ -118,13 +117,13 @@
             padding: 10px;
             background: var(--bg-container);
             border-top: var(--msg-received-border);
+            gap: 8px;
         }
         #message-input {
             flex-grow: 1;
             padding: 10px;
             border: var(--input-border);
             border-radius: 20px;
-            margin-right: 8px;
             font-size: clamp(0.9em, 3vw, 1em);
             transition: border-color 0.3s;
             background: var(--input-bg);
@@ -134,7 +133,7 @@
             border-color: #075e54;
             outline: none;
         }
-        #send-button {
+        #send-button, #video-call-button {
             padding: 10px 15px;
             background: #075e54;
             color: white;
@@ -143,7 +142,7 @@
             cursor: pointer;
             transition: background 0.3s;
         }
-        #send-button:hover {
+        #send-button:hover, #video-call-button:hover {
             background: #054d44;
         }
         .status {
@@ -242,6 +241,17 @@
         .peer-item:hover {
             background: #e0f7fa;
         }
+        .video-container {
+            display: flex;
+            justify-content: space-around;
+            margin: 10px 0;
+        }
+        #local-video, #remote-video {
+            width: 45%;
+            max-width: 300px;
+            border-radius: 10px;
+            background: #000;
+        }
         @media (max-width: 600px) {
             .chat-container {
                 margin: 10px;
@@ -259,11 +269,12 @@
             }
             .chat-input {
                 padding: 8px;
+                flex-wrap: wrap;
             }
             #message-input {
                 margin-right: 5px;
             }
-            #send-button {
+            #send-button, #video-call-button {
                 padding: 8px 12px;
             }
             .connection-controls {
@@ -275,6 +286,15 @@
             #copy-button, #connect-button, #disconnect-button, #theme-toggle {
                 padding: 6px;
             }
+            .video-container {
+                flex-direction: column;
+                align-items: center;
+            }
+            #local-video, #remote-video {
+                width: 100%;
+                max-width: 250px;
+                margin: 5px 0;
+            }
         }
     </style>
 </head>
@@ -285,7 +305,12 @@
             <input type="text" id="username-input" placeholder="Set your username">
         </div>
         <div class="status" id="status">Checking connection...</div>
-        <div class="chat-messages" id="chat-messages"></div>
+        <div class="chat-messages" id="chat-messages">
+            <div class="video-container" id="video-container">
+                <video id="local-video" autoplay muted></video>
+                <video id="remote-video" autoplay></video>
+            </div>
+        </div>
         <div class="chat-input">
             <input type="text" id="message-input" placeholder="Type a message...">
             <button id="send-button">
@@ -294,6 +319,7 @@
                     <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
                 </svg>
             </button>
+            <button id="video-call-button">Start Video Call</button>
         </div>
         <div class="connection-controls">
             <label>Your Peer ID: <input type="text" id="peer-id" readonly></label>
@@ -328,6 +354,7 @@
         const chatMessages = document.getElementById('chat-messages');
         const messageInput = document.getElementById('message-input');
         const sendButton = document.getElementById('send-button');
+        const videoCallButton = document.getElementById('video-call-button');
         const status = document.getElementById('status');
         const peerIdInput = document.getElementById('peer-id');
         const remoteIdInput = document.getElementById('remote-id');
@@ -338,6 +365,8 @@
         const peerList = document.getElementById('peer-list');
         const usernameInput = document.getElementById('username-input');
         const themeToggle = document.getElementById('theme-toggle');
+        const localVideo = document.getElementById('local-video');
+        const remoteVideo = document.getElementById('remote-video');
 
         // Load or set username from localStorage
         let currentUser = localStorage.getItem('chatUsername') || '';
@@ -353,6 +382,8 @@
         let conn;
         let isOnline = navigator.onLine;
         let peerStatus = {};
+        let localStream;
+        let call;
 
         // Encode text to prevent XSS
         function encodeHTML(text) {
@@ -388,7 +419,7 @@
             messageDiv.classList.add(isSent ? 'sent' : 'received');
             const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             messageDiv.innerHTML = `<strong>${encodeHTML(sender)}</strong> (${encodeHTML(time)}): ${encodeHTML(text)}`;
-            chatMessages.appendChild(messageDiv);
+            chatMessages.insertBefore(messageDiv, document.getElementById('video-container')); // Insert before video
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
             messages.push({ text, sender, time, isSent });
@@ -398,13 +429,13 @@
         // Load existing messages
         function loadMessages() {
             messages = JSON.parse(localStorage.getItem('chatMessages')) || [];
-            chatMessages.innerHTML = '';
+            chatMessages.innerHTML = '<div class="video-container" id="video-container"><video id="local-video" autoplay muted></video><video id="remote-video" autoplay></video></div>';
             messages.forEach(msg => {
                 const messageDiv = document.createElement('div');
                 messageDiv.classList.add('message');
                 messageDiv.classList.add(msg.isSent ? 'sent' : 'received');
                 messageDiv.innerHTML = `<strong>${encodeHTML(msg.sender)}</strong> (${encodeHTML(msg.time)}): ${encodeHTML(msg.text)}`;
-                chatMessages.appendChild(messageDiv);
+                chatMessages.insertBefore(messageDiv, document.getElementById('video-container'));
             });
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
@@ -424,6 +455,51 @@
                 }
                 messageInput.value = '';
             }
+        }
+
+        // Start video call
+        async function startVideoCall() {
+            if (!isOnline || !conn || !conn.open) {
+                addMessage('Cannot start video call while offline or not connected.', 'System', false);
+                return;
+            }
+
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                localVideo.srcObject = localStream;
+
+                call = peer.call(conn.peer, localStream);
+                call.on('stream', (remoteStream) => {
+                    remoteVideo.srcObject = remoteStream;
+                    addMessage('Video call started!', 'System', false);
+                });
+                call.on('close', () => {
+                    endVideoCall();
+                });
+                call.on('error', (err) => {
+                    console.error('Call error:', err);
+                    addMessage('Video call error: ' + err.message, 'System', false);
+                    endVideoCall();
+                });
+            } catch (err) {
+                console.error('Media error:', err);
+                addMessage('Failed to access camera/microphone: ' + err.message, 'System', false);
+            }
+        }
+
+        // End video call
+        function endVideoCall() {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+            if (call) {
+                call.close();
+                call = null;
+            }
+            localVideo.srcObject = null;
+            remoteVideo.srcObject = null;
+            addMessage('Video call ended.', 'System', false);
         }
 
         // Update peer list UI with online status
@@ -474,6 +550,7 @@
             disconnectButton.style.display = (isOnline && conn && conn.open) ? 'inline-block' : 'none';
             messageInput.disabled = false;
             sendButton.disabled = false;
+            videoCallButton.disabled = !isOnline || !conn || !conn.open;
             if (!isOnline) {
                 addMessage('You are offline. You can still write messages to save locally.', 'System', false);
             } else {
@@ -494,6 +571,33 @@
                 loadMessages();
                 updatePeerList();
                 setInterval(checkPeerStatus, 30000);
+            });
+
+            // Handle incoming calls
+            peer.on('call', (incomingCall) => {
+                navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+                    .then((stream) => {
+                        localStream = stream;
+                        localVideo.srcObject = stream;
+                        call = incomingCall;
+                        call.answer(stream);
+                        call.on('stream', (remoteStream) => {
+                            remoteVideo.srcObject = remoteStream;
+                            addMessage('Video call received and answered!', 'System', false);
+                        });
+                        call.on('close', () => {
+                            endVideoCall();
+                        });
+                        call.on('error', (err) => {
+                            console.error('Call error:', err);
+                            addMessage('Video call error: ' + err.message, 'System', false);
+                            endVideoCall();
+                        });
+                    })
+                    .catch((err) => {
+                        console.error('Media error:', err);
+                        addMessage('Failed to answer call: ' + err.message, 'System', false);
+                    });
             });
         } else {
             peerIdInput.value = myPeerId;
@@ -545,9 +649,11 @@
         disconnectButton.addEventListener('click', () => {
             if (conn && conn.open) {
                 conn.close();
+                endVideoCall(); // End video call if active
                 status.textContent = 'Online';
                 messageInput.disabled = false;
                 sendButton.disabled = false;
+                videoCallButton.disabled = false;
                 connectButton.disabled = false;
                 disconnectButton.style.display = 'none';
                 addMessage('You disconnected from the peer', 'System', false);
@@ -561,6 +667,7 @@
                 status.textContent = 'Connected to ' + conn.peer;
                 messageInput.disabled = false;
                 sendButton.disabled = false;
+                videoCallButton.disabled = false;
                 connectButton.disabled = true;
                 disconnectButton.style.display = 'inline-block';
                 addMessage('Connected to peer!', 'System', false);
@@ -582,8 +689,10 @@
                 status.textContent = 'Online';
                 messageInput.disabled = false;
                 sendButton.disabled = false;
+                videoCallButton.disabled = true;
                 connectButton.disabled = false;
                 disconnectButton.style.display = 'none';
+                endVideoCall(); // End video call if active
                 addMessage('Peer disconnected', 'System', false);
                 peerStatus[conn.peer] = false;
                 updatePeerList();
@@ -610,13 +719,12 @@
                 });
         });
 
-        // Event listeners for sending messages
+        // Event listeners for sending messages and video call
         sendButton.addEventListener('click', sendMessage);
         messageInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                sendMessage();
-            }
+            if (e.key === 'Enter') sendMessage();
         });
+        videoCallButton.addEventListener('click', startVideoCall);
 
         // Handle PeerJS errors
         if (peer) {
@@ -647,6 +755,31 @@
                     conn = connection;
                     setupConnection();
                 });
+                peer.on('call', (incomingCall) => {
+                    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+                        .then((stream) => {
+                            localStream = stream;
+                            localVideo.srcObject = stream;
+                            call = incomingCall;
+                            call.answer(stream);
+                            call.on('stream', (remoteStream) => {
+                                remoteVideo.srcObject = remoteStream;
+                                addMessage('Video call received and answered!', 'System', false);
+                            });
+                            call.on('close', () => {
+                                endVideoCall();
+                            });
+                            call.on('error', (err) => {
+                                console.error('Call error:', err);
+                                addMessage('Video call error: ' + err.message, 'System', false);
+                                endVideoCall();
+                            });
+                        })
+                        .catch((err) => {
+                            console.error('Media error:', err);
+                            addMessage('Failed to answer call: ' + err.message, 'System', false);
+                        });
+                });
             }
             updateStatus();
         });
@@ -657,6 +790,7 @@
             if (peer) peer.destroy();
             peer = null;
             conn = null;
+            endVideoCall();
             updateStatus();
         });
 
