@@ -6,7 +6,6 @@
     <title>Chatro</title>
     <style>
         :root {
-            /* Light mode variables */
             --bg-body: linear-gradient(135deg, #e0e7ff, #f3e8ff);
             --bg-container: white;
             --text-color: #333;
@@ -22,7 +21,6 @@
             --peer-list-bg: #fafafa;
         }
         [data-theme="dark"] {
-            /* Dark mode variables */
             --bg-body: linear-gradient(135deg, #2c2c2c, #3e3e3e);
             --bg-container: #1e1e1e;
             --text-color: #e0e0e0;
@@ -134,7 +132,7 @@
             border-color: #075e54;
             outline: none;
         }
-        #send-button, #share-location-button {
+        #send-button, #share-location {
             padding: 10px 15px;
             background: #075e54;
             color: white;
@@ -143,7 +141,7 @@
             cursor: pointer;
             transition: background 0.3s;
         }
-        #send-button:hover, #share-location-button:hover {
+        #send-button:hover, #share-location:hover {
             background: #054d44;
         }
         .status {
@@ -242,6 +240,14 @@
         .peer-item:hover {
             background: #e0f7fa;
         }
+        .location-link {
+            color: #2196F3;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+        .location-link:hover {
+            color: #1976D2;
+        }
         @media (max-width: 600px) {
             .chat-container {
                 margin: 10px;
@@ -259,11 +265,12 @@
             }
             .chat-input {
                 padding: 8px;
+                flex-wrap: wrap;
             }
             #message-input {
                 margin-right: 5px;
             }
-            #send-button, #share-location-button {
+            #send-button, #share-location {
                 padding: 8px 12px;
             }
             .connection-controls {
@@ -294,12 +301,7 @@
                     <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
                 </svg>
             </button>
-            <button id="share-location-button">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"></path>
-                    <circle cx="12" cy="9" r="2.5"></circle>
-                </svg>
-            </button>
+            <button id="share-location">Share Location</button>
         </div>
         <div class="connection-controls">
             <label>Your Peer ID: <input type="text" id="peer-id" readonly></label>
@@ -334,7 +336,7 @@
         const chatMessages = document.getElementById('chat-messages');
         const messageInput = document.getElementById('message-input');
         const sendButton = document.getElementById('send-button');
-        const shareLocationButton = document.getElementById('share-location-button');
+        const shareLocationButton = document.getElementById('share-location');
         const status = document.getElementById('status');
         const peerIdInput = document.getElementById('peer-id');
         const remoteIdInput = document.getElementById('remote-id');
@@ -389,16 +391,21 @@
         let knownPeers = JSON.parse(localStorage.getItem('knownPeers')) || {};
 
         // Add message to chat and localStorage
-        function addMessage(text, sender, isSent) {
+        function addMessage(text, sender, isSent, isLocation = false) {
             const messageDiv = document.createElement('div');
             messageDiv.classList.add('message');
             messageDiv.classList.add(isSent ? 'sent' : 'received');
             const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            messageDiv.innerHTML = `<strong>${encodeHTML(sender)}</strong> (${encodeHTML(time)}): ${text}`;
+            if (isLocation) {
+                const [lat, lon] = text.split(',').map(coord => coord.trim());
+                messageDiv.innerHTML = `<strong>${encodeHTML(sender)}</strong> (${encodeHTML(time)}): <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" class="location-link">My Location: ${encodeHTML(text)}</a>`;
+            } else {
+                messageDiv.innerHTML = `<strong>${encodeHTML(sender)}</strong> (${encodeHTML(time)}): ${encodeHTML(text)}`;
+            }
             chatMessages.appendChild(messageDiv);
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
-            messages.push({ text, sender, time, isSent });
+            messages.push({ text, sender, time, isSent, isLocation });
             localStorage.setItem('chatMessages', JSON.stringify(messages));
         }
 
@@ -410,7 +417,12 @@
                 const messageDiv = document.createElement('div');
                 messageDiv.classList.add('message');
                 messageDiv.classList.add(msg.isSent ? 'sent' : 'received');
-                messageDiv.innerHTML = `<strong>${encodeHTML(msg.sender)}</strong> (${encodeHTML(msg.time)}): ${encodeHTML(msg.text)}`;
+                if (msg.isLocation) {
+                    const [lat, lon] = msg.text.split(',').map(coord => coord.trim());
+                    messageDiv.innerHTML = `<strong>${encodeHTML(msg.sender)}</strong> (${encodeHTML(msg.time)}): <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" class="location-link">My Location: ${encodeHTML(msg.text)}</a>`;
+                } else {
+                    messageDiv.innerHTML = `<strong>${encodeHTML(msg.sender)}</strong> (${encodeHTML(msg.time)}): ${encodeHTML(msg.text)}`;
+                }
                 chatMessages.appendChild(messageDiv);
             });
             chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -442,12 +454,12 @@
             navigator.geolocation.getCurrentPosition(
                 (position) => {
                     const { latitude, longitude } = position.coords;
-                    const locationText = `My location: <a href="https://maps.google.com/?q=${latitude},${longitude}" target="_blank">View on Map</a>`;
+                    const locationText = `${latitude}, ${longitude}`;
                     if (isOnline && conn && conn.open) {
-                        conn.send(JSON.stringify({ sender: currentUser, text: locationText }));
-                        addMessage(locationText, currentUser, true);
+                        conn.send(JSON.stringify({ sender: currentUser, text: locationText, isLocation: true }));
+                        addMessage(locationText, currentUser, true, true);
                     } else {
-                        addMessage(locationText, currentUser, true);
+                        addMessage(locationText, currentUser, true, true);
                         if (!isOnline) {
                             addMessage('You are offline. Location saved locally.', 'System', false);
                         }
@@ -508,8 +520,9 @@
             disconnectButton.style.display = (isOnline && conn && conn.open) ? 'inline-block' : 'none';
             messageInput.disabled = false;
             sendButton.disabled = false;
+            shareLocationButton.disabled = false;
             if (!isOnline) {
-                addMessage('You are offline. You can still write messages to save locally.', 'System', false);
+                addMessage('You are offline. You can still write messages or share location to save locally.', 'System', false);
             } else {
                 addMessage('You are back online!', 'System', false);
                 checkPeerStatus();
@@ -532,7 +545,7 @@
         } else {
             peerIdInput.value = myPeerId;
             status.textContent = 'Offline';
-            addMessage('You are offline. Set your username and write messages to save locally.', 'System', false);
+            addMessage('You are offline. Set your username and write messages or share location to save locally.', 'System', false);
             loadMessages();
             updatePeerList();
         }
@@ -582,6 +595,7 @@
                 status.textContent = 'Online';
                 messageInput.disabled = false;
                 sendButton.disabled = false;
+                shareLocationButton.disabled = false;
                 connectButton.disabled = false;
                 disconnectButton.style.display = 'none';
                 addMessage('You disconnected from the peer', 'System', false);
@@ -595,6 +609,7 @@
                 status.textContent = 'Connected to ' + conn.peer;
                 messageInput.disabled = false;
                 sendButton.disabled = false;
+                shareLocationButton.disabled = false;
                 connectButton.disabled = true;
                 disconnectButton.style.display = 'inline-block';
                 addMessage('Connected to peer!', 'System', false);
@@ -608,14 +623,15 @@
             });
 
             conn.on('data', (data) => {
-                const { sender, text } = JSON.parse(data);
-                addMessage(text, sender, false);
+                const { sender, text, isLocation } = JSON.parse(data);
+                addMessage(text, sender, false, isLocation || false);
             });
 
             conn.on('close', () => {
                 status.textContent = 'Online';
                 messageInput.disabled = false;
                 sendButton.disabled = false;
+                shareLocationButton.disabled = false;
                 connectButton.disabled = false;
                 disconnectButton.style.display = 'none';
                 addMessage('Peer disconnected', 'System', false);
