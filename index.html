@@ -117,6 +117,7 @@
             background: var(--bg-container);
             border-top: var(--msg-received-border);
             gap: 8px;
+            flex-wrap: wrap;
         }
         #message-input {
             flex-grow: 1;
@@ -132,7 +133,7 @@
             border-color: #075e54;
             outline: none;
         }
-        #send-button, #call-button {
+        #send-button, #call-button, #end-call-button {
             padding: 10px 15px;
             background: #075e54;
             color: white;
@@ -141,8 +142,15 @@
             cursor: pointer;
             transition: background 0.3s;
         }
-        #send-button:hover, #call-button:hover {
+        #send-button:hover, #call-button:hover, #end-call-button:hover {
             background: #054d44;
+        }
+        #end-call-button {
+            background: #f44336;
+            display: none;
+        }
+        #end-call-button:hover {
+            background: #d32f2f;
         }
         .status {
             padding: 8px;
@@ -262,7 +270,7 @@
             #message-input {
                 margin-right: 5px;
             }
-            #send-button, #call-button {
+            #send-button, #call-button, #end-call-button {
                 padding: 8px 12px;
             }
             .connection-controls {
@@ -294,6 +302,7 @@
                 </svg>
             </button>
             <button id="call-button">Start Call</button>
+            <button id="end-call-button">End Call</button>
         </div>
         <div class="connection-controls">
             <label>Your Peer ID: <input type="text" id="peer-id" readonly></label>
@@ -329,6 +338,7 @@
         const messageInput = document.getElementById('message-input');
         const sendButton = document.getElementById('send-button');
         const callButton = document.getElementById('call-button');
+        const endCallButton = document.getElementById('end-call-button');
         const status = document.getElementById('status');
         const peerIdInput = document.getElementById('peer-id');
         const remoteIdInput = document.getElementById('remote-id');
@@ -356,6 +366,9 @@
         let peerStatus = {};
         let localStream;
         let call;
+        let audioContext;
+        let sourceNode;
+        let filterNode;
 
         // Encode text to prevent XSS
         function encodeHTML(text) {
@@ -429,7 +442,7 @@
             }
         }
 
-        // Start audio call
+        // Start audio call with noise reduction
         async function startCall() {
             if (!isOnline || !conn || !conn.open) {
                 addMessage('Cannot start call while offline or not connected.', 'System', false);
@@ -438,12 +451,27 @@
 
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                call = peer.call(conn.peer, localStream);
+                
+                // Set up Web Audio API for noise reduction
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                sourceNode = audioContext.createMediaStreamSource(localStream);
+                filterNode = audioContext.createBiquadFilter();
+                filterNode.type = 'lowpass'; // Reduce high-frequency noise
+                filterNode.frequency.value = 3000; // Cut off frequencies above 3kHz
+                sourceNode.connect(filterNode);
+                filterNode.connect(audioContext.destination);
+
+                const filteredStream = audioContext.createMediaStreamDestination().stream;
+                sourceNode.connect(audioContext.createMediaStreamDestination());
+                call = peer.call(conn.peer, filteredStream);
+
                 call.on('stream', (remoteStream) => {
                     const audio = new Audio();
                     audio.srcObject = remoteStream;
                     audio.play();
-                    addMessage('Call started! Use the Disconnect button to end the call.', 'System', false);
+                    addMessage('Call started!', 'System', false);
+                    endCallButton.style.display = 'inline-block';
+                    callButton.disabled = true;
                 });
                 call.on('close', () => {
                     endCall();
@@ -469,7 +497,15 @@
                 call.close();
                 call = null;
             }
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+                sourceNode = null;
+                filterNode = null;
+            }
             addMessage('Call ended.', 'System', false);
+            endCallButton.style.display = 'none';
+            callButton.disabled = !isOnline || !conn || !conn.open;
         }
 
         // Update peer list UI with online status
@@ -520,7 +556,8 @@
             disconnectButton.style.display = (isOnline && conn && conn.open) ? 'inline-block' : 'none';
             messageInput.disabled = false;
             sendButton.disabled = false;
-            callButton.disabled = !isOnline || !conn || !conn.open;
+            callButton.disabled = !isOnline || !conn || !conn.open || (call && call.open);
+            endCallButton.style.display = (call && call.open) ? 'inline-block' : 'none';
             if (!isOnline) {
                 addMessage('You are offline. You can still write messages to save locally.', 'System', false);
             } else {
@@ -548,13 +585,26 @@
                 navigator.mediaDevices.getUserMedia({ audio: true })
                     .then((stream) => {
                         localStream = stream;
+                        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                        sourceNode = audioContext.createMediaStreamSource(localStream);
+                        filterNode = audioContext.createBiquadFilter();
+                        filterNode.type = 'lowpass';
+                        filterNode.frequency.value = 3000;
+                        sourceNode.connect(filterNode);
+                        filterNode.connect(audioContext.destination);
+
+                        const filteredStream = audioContext.createMediaStreamDestination().stream;
+                        sourceNode.connect(audioContext.createMediaStreamDestination());
+
                         call = incomingCall;
-                        call.answer(stream);
+                        call.answer(filteredStream);
                         call.on('stream', (remoteStream) => {
                             const audio = new Audio();
                             audio.srcObject = remoteStream;
                             audio.play();
-                            addMessage('Call received and answered! Use the Disconnect button to end the call.', 'System', false);
+                            addMessage('Call received and answered!', 'System', false);
+                            endCallButton.style.display = 'inline-block';
+                            callButton.disabled = true;
                         });
                         call.on('close', () => {
                             endCall();
@@ -624,7 +674,7 @@
                 status.textContent = 'Online';
                 messageInput.disabled = false;
                 sendButton.disabled = false;
-                callButton.disabled = true;
+                callButton.disabled = false;
                 connectButton.disabled = false;
                 disconnectButton.style.display = 'none';
                 addMessage('You disconnected from the peer', 'System', false);
@@ -660,7 +710,7 @@
                 status.textContent = 'Online';
                 messageInput.disabled = false;
                 sendButton.disabled = false;
-                callButton.disabled = true;
+                callButton.disabled = false;
                 connectButton.disabled = false;
                 disconnectButton.style.display = 'none';
                 endCall(); // End call if active
@@ -690,12 +740,13 @@
                 });
         });
 
-        // Event listeners for sending messages and starting call
+        // Event listeners for sending messages and call controls
         sendButton.addEventListener('click', sendMessage);
         messageInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendMessage();
         });
         callButton.addEventListener('click', startCall);
+        endCallButton.addEventListener('click', endCall);
 
         // Handle PeerJS errors
         if (peer) {
@@ -730,13 +781,26 @@
                     navigator.mediaDevices.getUserMedia({ audio: true })
                         .then((stream) => {
                             localStream = stream;
+                            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                            sourceNode = audioContext.createMediaStreamSource(localStream);
+                            filterNode = audioContext.createBiquadFilter();
+                            filterNode.type = 'lowpass';
+                            filterNode.frequency.value = 3000;
+                            sourceNode.connect(filterNode);
+                            filterNode.connect(audioContext.destination);
+
+                            const filteredStream = audioContext.createMediaStreamDestination().stream;
+                            sourceNode.connect(audioContext.createMediaStreamDestination());
+
                             call = incomingCall;
-                            call.answer(stream);
+                            call.answer(filteredStream);
                             call.on('stream', (remoteStream) => {
                                 const audio = new Audio();
                                 audio.srcObject = remoteStream;
                                 audio.play();
-                                addMessage('Call received and answered! Use the Disconnect button to end the call.', 'System', false);
+                                addMessage('Call received and answered!', 'System', false);
+                                endCallButton.style.display = 'inline-block';
+                                callButton.disabled = true;
                             });
                             call.on('close', () => {
                                 endCall();
