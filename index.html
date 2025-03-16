@@ -275,7 +275,7 @@
             color: var(--text-color);
         }
         .peer-item.online {
-            color: #2e7d32;
+            Coyote color: #2e7d32;
         }
         .peer-item.offline {
             color: #d32f2f;
@@ -396,7 +396,7 @@
         // Load or set username from localStorage
         let currentUser = localStorage.getItem('chatUsername') || '';
         if (!currentUser) {
-            currentUser = 'User_' + Math.random().toString(36).substr(2, 5);
+            currentUser = `User_${Math.random().toString(36).substr(2, 5)}`;
             localStorage.setItem('chatUsername', currentUser);
         }
         usernameInput.value = currentUser;
@@ -405,14 +405,13 @@
         let messages = JSON.parse(localStorage.getItem('chatMessages')) || [];
         let peer;
         let conn;
-        let isOnline = document.hasFocus();
+        let isOnline = navigator.onLine;
         let peerStatus = {};
         let localStream;
         let call;
         let audioContext;
         let sourceNode;
         let filterNode;
-        let lastStatus = null; // Track last online status to avoid repeat alerts
 
         // Encode text to prevent XSS
         function encodeHTML(text) {
@@ -432,27 +431,17 @@
             return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         }
 
-        // Debounce utility
-        function debounce(func, wait) {
-            let timeout;
-            return function(...args) {
-                clearTimeout(timeout);
-                timeout = setTimeout(() => func.apply(this, args), wait);
-            };
-        }
-
         // Update username on input change
         usernameInput.addEventListener('change', () => {
-            currentUser = encodeHTML(usernameInput.value.trim()) || 'User_' + Math.random().toString(36).substr(2, 5);
+            currentUser = encodeHTML(usernameInput.value.trim()) || `User_${Math.random().toString(36).substr(2, 5)}`;
             localStorage.setItem('chatUsername', currentUser);
-            console.log('Username updated');
-            addMessage('Username updated', 'System', false);
+            addMessage(`Username updated to "${currentUser}"`, 'System', false);
         });
 
         // Load or generate persistent PeerJS ID
         let myPeerId = localStorage.getItem('myPeerId');
         if (!myPeerId) {
-            myPeerId = Math.random().toString(36).substr(2, 9) + '-' + Date.now();
+            myPeerId = `${Math.random().toString(36).substr(2, 9)}-${Date.now()}`;
             localStorage.setItem('myPeerId', myPeerId);
         }
 
@@ -472,9 +461,9 @@
                     img.src = fileData;
                     img.style.maxWidth = '100%';
                     messageDiv.appendChild(img);
-                    messageDiv.innerHTML += '<br><strong>' + encodeHTML(sender) + '</strong> (' + encodeHTML(time) + '): Sent image "' + encodeHTML(fileName) + '"';
+                    messageDiv.innerHTML += `<br><strong>${encodeHTML(sender)}</strong> (${encodeHTML(time)}): Sent image "${encodeHTML(fileName)}"`;
                 } else {
-                    messageDiv.innerHTML = '<strong>' + encodeHTML(sender) + '</strong> (' + encodeHTML(time) + '): Sent file "' + encodeHTML(fileName) + '"';
+                    messageDiv.innerHTML = `<strong>${encodeHTML(sender)}</strong> (${encodeHTML(time)}): Sent file "${encodeHTML(fileName)}"`;
                 }
                 const downloadButton = document.createElement('button');
                 downloadButton.classList.add('download-button');
@@ -489,16 +478,16 @@
                 };
                 messageDiv.appendChild(downloadButton);
             } else if (isLocation && latitude !== null && longitude !== null) {
-                const mapUrl = 'https://www.google.com/maps?q=' + latitude + ',' + longitude;
-                messageDiv.innerHTML = '<strong>' + encodeHTML(sender) + '</strong> (' + encodeHTML(time) + '): Shared location - <a href="' + encodeHTML(mapUrl) + '" target="_blank">View on Map</a>';
+                const mapUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
+                messageDiv.innerHTML = `<strong>${encodeHTML(sender)}</strong> (${encodeHTML(time)}): Shared location - <a href="${encodeHTML(mapUrl)}" target="_blank">View on Map</a>`;
             } else {
-                messageDiv.innerHTML = '<strong>' + encodeHTML(sender) + '</strong> (' + encodeHTML(time) + '): ' + encodeHTML(text) + (!verified ? ' [Integrity check failed]' : '');
+                messageDiv.innerHTML = `<strong>${encodeHTML(sender)}</strong> (${encodeHTML(time)}): ${encodeHTML(text)}${!verified ? ' [Integrity check failed]' : ''}`;
             }
             chatMessages.appendChild(messageDiv);
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
             messages.push({ 
-                text: isFile ? 'Sent file: ' + fileName : (isLocation ? 'Shared location: ' + latitude + ',' + longitude : text), 
+                text: isFile ? `Sent file: ${fileName}` : (isLocation ? `Shared location: ${latitude},${longitude}` : text), 
                 sender, 
                 time, 
                 isSent, 
@@ -518,10 +507,10 @@
                 messageDiv.classList.add(msg.isSent ? 'sent' : 'received');
                 if (msg.isLocation) {
                     const [lat, lon] = msg.text.split(': ')[1].split(',');
-                    const mapUrl = 'https://www.google.com/maps?q=' + lat + ',' + lon;
-                    messageDiv.innerHTML = '<strong>' + encodeHTML(msg.sender) + '</strong> (' + encodeHTML(msg.time) + '): Shared location - <a href="' + encodeHTML(mapUrl) + '" target="_blank">View on Map</a>';
+                    const mapUrl = `https://www.google.com/maps?q=${lat},${lon}`;
+                    messageDiv.innerHTML = `<strong>${encodeHTML(msg.sender)}</strong> (${encodeHTML(msg.time)}): Shared location - <a href="${encodeHTML(mapUrl)}" target="_blank">View on Map</a>`;
                 } else {
-                    messageDiv.innerHTML = '<strong>' + encodeHTML(msg.sender) + '</strong> (' + encodeHTML(msg.time) + '): ' + encodeHTML(msg.text);
+                    messageDiv.innerHTML = `<strong>${encodeHTML(msg.sender)}</strong> (${encodeHTML(msg.time)}): ${encodeHTML(msg.text)}`;
                 }
                 chatMessages.appendChild(messageDiv);
             });
@@ -533,8 +522,7 @@
             chatMessages.innerHTML = '';
             messages = [];
             localStorage.setItem('chatMessages', JSON.stringify(messages));
-            console.log('Chat cleared');
-            alert('Chat cleared');
+            alert('Chatroom cleared.');
         }
 
         // Send text message with SHA-256 hash
@@ -542,18 +530,14 @@
             const text = messageInput.value.trim();
             if (text) {
                 const hash = await sha256(text);
-                const data = JSON.stringify({ type: 'text', sender: currentUser, text: text, hash: hash });
-                if (conn && conn.open) {
+                const data = JSON.stringify({ type: 'text', sender: currentUser, text, hash });
+                if (isOnline && conn && conn.open) {
                     conn.send(data);
                     addMessage(text, currentUser, true);
                 } else {
                     addMessage(text, currentUser, true);
                     if (!isOnline) {
-                        console.log('Offline, message saved');
-                        alert('Offline, message saved');
-                    } else {
-                        console.log('Not connected, message saved');
-                        alert('Not connected, message saved');
+                        alert('You are offline. Message saved locally.');
                     }
                 }
                 messageInput.value = '';
@@ -570,23 +554,18 @@
                 const data = JSON.stringify({ 
                     type: 'file', 
                     sender: currentUser, 
-                    fileName: fileName, 
+                    fileName, 
                     fileData: Array.from(new Uint8Array(fileData)), 
-                    hash: hash 
+                    hash 
                 });
-                if (conn && conn.open) {
+                if (isOnline && conn && conn.open) {
                     conn.send(data);
-                    addMessage('Sent file: ' + fileName, currentUser, true, true, true, URL.createObjectURL(file), fileName);
-                    console.log('File sent');
-                    alert('File sent');
+                    addMessage(`Sent file: ${fileName}`, currentUser, true, true, true, URL.createObjectURL(file), fileName);
+                    alert('File sent successfully!');
                 } else {
-                    addMessage('File saved locally', currentUser, true, true, true, URL.createObjectURL(file), fileName);
+                    addMessage(`File "${fileName}" saved locally (offline).`, currentUser, true, true, true, URL.createObjectURL(file), fileName);
                     if (!isOnline) {
-                        console.log('Offline, file saved');
-                        alert('Offline, file saved');
-                    } else {
-                        console.log('Not connected, file saved');
-                        alert('Not connected, file saved');
+                        alert('You are offline. File saved locally.');
                     }
                 }
             };
@@ -595,43 +574,53 @@
 
         // Share location with improved accuracy
         async function shareLocation() {
-            if (!conn || !conn.open) {
-                console.log('Cannot share location');
-                alert('Cannot share location');
+            if (!isOnline || !conn || !conn.open) {
+                alert('Cannot share location while offline or not connected.');
                 return;
             }
             if (!navigator.geolocation) {
-                console.log('Geolocation not supported');
-                alert('Geolocation not supported');
+                alert('Geolocation is not supported by your browser.');
                 return;
             }
 
             navigator.geolocation.getCurrentPosition(
                 async (position) => {
                     const { latitude, longitude, accuracy } = position.coords;
-                    const locationText = 'Location: ' + latitude.toFixed(6) + ', ' + longitude.toFixed(6);
+                    const locationText = `Location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} (Accuracy: ${accuracy.toFixed(1)}m)`;
                     const hash = await sha256(locationText);
                     const data = JSON.stringify({ 
                         type: 'location', 
                         sender: currentUser, 
-                        latitude: latitude, 
-                        longitude: longitude, 
-                        accuracy: accuracy, 
-                        hash: hash 
+                        latitude, 
+                        longitude, 
+                        accuracy, 
+                        hash 
                     });
                     conn.send(data);
                     addMessage(locationText, currentUser, true, true, false, null, '', true, latitude, longitude);
-                    console.log('Location shared');
-                    alert('Location shared');
+                    alert('Location shared successfully! Accuracy: ' + accuracy.toFixed(1) + ' meters');
                 },
                 (error) => {
-                    console.log('Location error:', error.message);
-                    alert('Location error');
+                    let errorMessage = 'Failed to share location: ';
+                    switch (error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMessage += 'Permission denied.';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMessage += 'Location unavailable.';
+                            break;
+                        case error.TIMEOUT:
+                            errorMessage += 'Request timed out. Try again for better accuracy.';
+                            break;
+                        default:
+                            errorMessage += 'Unknown error.';
+                    }
+                    alert(errorMessage);
                 },
                 {
-                    enableHighAccuracy: true,
-                    maximumAge: 0,
-                    timeout: 10000
+                    enableHighAccuracy: true, // Request GPS for higher accuracy
+                    maximumAge: 0,           // No cached position
+                    timeout: 10000           // 10-second timeout
                 }
             );
         }
@@ -652,9 +641,8 @@
 
         // Start audio call with noise reduction
         async function startCall() {
-            if (!conn || !conn.open) {
-                console.log('Cannot start call');
-                alert('Cannot start call');
+            if (!isOnline || !conn || !conn.open) {
+                alert('Cannot start call while offline or not connected.');
                 return;
             }
 
@@ -676,8 +664,7 @@
                     const audio = new Audio();
                     audio.srcObject = remoteStream;
                     audio.play();
-                    console.log('Call started');
-                    alert('Call started');
+                    alert('Call started!');
                     endCallButton.style.display = 'inline-block';
                     callButton.disabled = true;
                 });
@@ -686,11 +673,12 @@
                 });
                 call.on('error', (err) => {
                     console.error('Call error:', err);
-                    alert('Call error');
+                    alert('Call error: ' + err.message);
+                    endCall();
                 });
             } catch (err) {
                 console.error('Media error:', err);
-                alert('Media error');
+                alert('Failed to access microphone: ' + err.message);
             }
         }
 
@@ -710,10 +698,9 @@
                 sourceNode = null;
                 filterNode = null;
             }
-            console.log('Call ended');
-            alert('Call ended');
+            alert('Call ended.');
             endCallButton.style.display = 'none';
-            callButton.disabled = !conn || !conn.open;
+            callButton.disabled = !isOnline || !conn || !conn.open;
         }
 
         // Update peer list UI with online status
@@ -723,7 +710,7 @@
                 const peerItem = document.createElement('div');
                 peerItem.classList.add('peer-item');
                 peerItem.classList.add(peerStatus[id] ? 'online' : 'offline');
-                peerItem.innerHTML = encodeHTML(name) + ' (' + encodeHTML(id) + ') - ' + (peerStatus[id] ? 'Online' : 'Offline');
+                peerItem.innerHTML = `${encodeHTML(name)} (${encodeHTML(id)}) - ${peerStatus[id] ? 'Online' : 'Offline'}`;
                 peerItem.addEventListener('click', () => {
                     remoteIdInput.value = id;
                     peerNameInput.value = name;
@@ -733,21 +720,9 @@
             }
         }
 
-        // Send online status to peers
-        function sendOnlineStatus() {
-            if (conn && conn.open) {
-                const data = JSON.stringify({ 
-                    type: 'status', 
-                    sender: currentUser, 
-                    online: isOnline 
-                });
-                conn.send(data);
-            }
-        }
-
         // Check peer online status
         function checkPeerStatus() {
-            if (!peer) return;
+            if (!isOnline || !peer) return;
             for (const id in knownPeers) {
                 if (id !== myPeerId && (!conn || conn.peer !== id)) {
                     const tempConn = peer.connect(id, { metadata: { name: currentUser, ping: true } });
@@ -768,109 +743,112 @@
             }
         }
 
-        // Update online/offline status with debounce
+        // Update online/offline status
         function updateStatus() {
+            isOnline = navigator.onLine;
             status.textContent = isOnline ? 'Online' : 'Offline';
-            connectButton.disabled = (conn && conn.open);
-            disconnectButton.style.display = (conn && conn.open) ? 'inline-block' : 'none';
+            connectButton.disabled = !isOnline || (conn && conn.open);
+            disconnectButton.style.display = (isOnline && conn && conn.open) ? 'inline-block' : 'none';
             messageInput.disabled = false;
             sendButton.disabled = false;
-            fileButton.disabled = !conn || !conn.open;
-            callButton.disabled = !conn || !conn.open || (call && call.open);
+            fileButton.disabled = !isOnline || !conn || !conn.open;
+            callButton.disabled = !isOnline || !conn || !conn.open || (call && call.open);
             endCallButton.style.display = (call && call.open) ? 'inline-block' : 'none';
-            locationButton.disabled = !conn || !conn.open;
-
-            // Only alert on first status change
-            if (lastStatus !== isOnline) {
-                if (isOnline) {
-                    console.log('User is online');
-                    alert('User is online');
-                } else {
-                    console.log('User is offline');
-                    alert('User is offline');
-                }
-                lastStatus = isOnline;
+            locationButton.disabled = !isOnline || !conn || !conn.open;
+            if (!isOnline) {
+                alert('You are offline. You can still write messages or save files locally.');
+            } else {
+                alert('You are back online!');
+                checkPeerStatus();
             }
+        }
 
-            sendOnlineStatus();
-            checkPeerStatus();
+        // Initialize PeerJS with persistent ID (if online)
+        if (isOnline) {
+            peer = new Peer(myPeerId);
+            peer.on('open', (id) => {
+                peerIdInput.value = id;
+                status.textContent = 'Online';
+                alert('Welcome! Please set your username in the header above.');
+                alert('Share your Peer ID with someone to chat!');
+                console.log('Peer ID:', id);
+                loadMessages();
+                updatePeerList();
+                setInterval(checkPeerStatus, 30000);
+            });
+
+            peer.on('call', (incomingCall) => {
+                navigator.mediaDevices.getUserMedia({ audio: true })
+                    .then((stream) => {
+                        localStream = stream;
+                        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                        sourceNode = audioContext.createMediaStreamSource(localStream);
+                        filterNode = audioContext.createBiquadFilter();
+                        filterNode.type = 'lowpass';
+                        filterNode.frequency.value = 3000;
+                        sourceNode.connect(filterNode);
+                        filterNode.connect(audioContext.destination);
+
+                        const filteredStream = audioContext.createMediaStreamDestination().stream;
+                        sourceNode.connect(audioContext.createMediaStreamDestination());
+
+                        call = incomingCall;
+                        call.answer(filteredStream);
+                        call.on('stream', (remoteStream) => {
+                            const audio = new Audio();
+                            audio.srcObject = remoteStream;
+                            audio.play();
+                            alert('Call received and answered!');
+                            endCallButton.style.display = 'inline-block';
+                            callButton.disabled = true;
+                        });
+                        call.on('close', () => {
+                            endCall();
+                        });
+                        call.on('error', (err) => {
+                            console.error('Call error:', err);
+                            alert('Call error: ' + err.message);
+                            endCall();
+                        });
+                    })
+                    .catch((err) => {
+                        console.error('Media error:', err);
+                        alert('Failed to answer call: ' + err.message);
+                    });
+            });
+        } else {
+            peerIdInput.value = myPeerId;
+            status.textContent = 'Offline';
+            alert('You are offline. Set your username and write messages or save files locally.');
+            loadMessages();
             updatePeerList();
         }
 
-        const debouncedUpdateStatus = debounce(updateStatus, 1000); // Debounce by 1 second
-
-        // Initialize PeerJS with persistent ID
-        peer = new Peer(myPeerId);
-        peer.on('open', (id) => {
-            peerIdInput.value = id;
-            status.textContent = isOnline ? 'Online' : 'Offline';
-            console.log('Peer opened');
-            alert('Welcome to Chatro');
-            loadMessages();
-            updatePeerList();
-            setInterval(checkPeerStatus, 30000);
-        });
-
-        peer.on('call', (incomingCall) => {
-            navigator.mediaDevices.getUserMedia({ audio: true })
-                .then((stream) => {
-                    localStream = stream;
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    sourceNode = audioContext.createMediaStreamSource(localStream);
-                    filterNode = audioContext.createBiquadFilter();
-                    filterNode.type = 'lowpass';
-                    filterNode.frequency.value = 3000;
-                    sourceNode.connect(filterNode);
-                    filterNode.connect(audioContext.destination);
-
-                    const filteredStream = audioContext.createMediaStreamDestination().stream;
-                    sourceNode.connect(audioContext.createMediaStreamDestination());
-
-                    call = incomingCall;
-                    call.answer(filteredStream);
-                    call.on('stream', (remoteStream) => {
-                        const audio = new Audio();
-                        audio.srcObject = remoteStream;
-                        audio.play();
-                        console.log('Call answered');
-                        alert('Call answered');
-                        endCallButton.style.display = 'inline-block';
-                        callButton.disabled = true;
-                    });
-                    call.on('close', () => {
-                        endCall();
-                    });
-                    call.on('error', (err) => {
-                        console.error('Call error:', err);
-                        alert('Call error');
-                    });
-                })
-                .catch((err) => {
-                    console.error('Media error:', err);
-                    alert('Media error');
-                });
-        });
-
         // Handle incoming connections
-        peer.on('connection', (connection) => {
-            if (connection.metadata && connection.metadata.ping) {
-                peerStatus[connection.peer] = true;
-                connection.close();
+        if (peer) {
+            peer.on('connection', (connection) => {
+                if (connection.metadata?.ping) {
+                    peerStatus[connection.peer] = true;
+                    connection.close();
+                    updatePeerList();
+                    return;
+                }
+                conn = connection;
+                setupConnection();
+                const peerName = conn.metadata?.name || 'Unknown';
+                knownPeers[conn.peer] = peerName;
+                localStorage.setItem('knownPeers', JSON.stringify(knownPeers));
                 updatePeerList();
-                return;
-            }
-            conn = connection;
-            setupConnection();
-            const peerName = (conn.metadata && conn.metadata.name) ? conn.metadata.name : 'Unknown';
-            knownPeers[conn.peer] = peerName;
-            localStorage.setItem('knownPeers', JSON.stringify(knownPeers));
-            updatePeerList();
-            console.log('Peer connected');
-            alert('Peer connected');
-        });
+                alert(`Incoming connection from ${peerName} (${conn.peer})`);
+            });
+        }
 
         // Connect to another peer
         connectButton.addEventListener('click', () => {
+            if (!isOnline) {
+                alert('Cannot connect while offline.');
+                return;
+            }
             const remoteId = remoteIdInput.value.trim();
             const peerName = encodeHTML(peerNameInput.value.trim()) || 'Unknown';
             if (remoteId && remoteId !== myPeerId) {
@@ -889,15 +867,14 @@
             if (conn && conn.open) {
                 conn.close();
                 endCall();
-                status.textContent = isOnline ? 'Online' : 'Offline';
+                status.textContent = 'Online';
                 messageInput.disabled = false;
                 sendButton.disabled = false;
                 fileButton.disabled = false;
                 callButton.disabled = false;
                 connectButton.disabled = false;
                 disconnectButton.style.display = 'none';
-                console.log('Disconnected');
-                alert('Disconnected');
+                alert('You disconnected from the peer');
                 checkPeerStatus();
             }
         });
@@ -913,12 +890,10 @@
                 locationButton.disabled = false;
                 connectButton.disabled = true;
                 disconnectButton.style.display = 'inline-block';
-                console.log('Connection opened');
-                alert('Connection opened');
+                alert('Connected to peer!');
                 peerStatus[conn.peer] = true;
-                sendOnlineStatus();
                 updatePeerList();
-                if (conn.metadata && conn.metadata.name) {
+                if (conn.metadata?.name) {
                     knownPeers[conn.peer] = conn.metadata.name;
                     localStorage.setItem('knownPeers', JSON.stringify(knownPeers));
                     updatePeerList();
@@ -933,8 +908,7 @@
                     const isVerified = computedHash === hash;
                     addMessage(text, sender, false, isVerified);
                     if (!isVerified) {
-                        console.log('Text integrity failed');
-                        alert('Text integrity failed');
+                        alert('Warning: Message integrity check failed!');
                     }
                 } else if (parsedData.type === 'file') {
                     const { sender, fileName, fileData, hash } = parsedData;
@@ -943,43 +917,28 @@
                     const isVerified = computedHash === hash;
                     const blob = new Blob([fileBuffer], { type: 'application/octet-stream' });
                     const url = URL.createObjectURL(blob);
-                    addMessage('Received file', sender, false, isVerified, true, url, fileName);
+                    addMessage(`Received file: ${fileName}`, sender, false, isVerified, true, url, fileName);
                     if (!isVerified) {
-                        console.log('File integrity failed');
-                        alert('File integrity failed');
+                        alert('Warning: File integrity check failed!');
                     } else {
-                        console.log('File received');
-                        alert('File received');
+                        alert('File received successfully!');
                     }
                 } else if (parsedData.type === 'location') {
                     const { sender, latitude, longitude, accuracy, hash } = parsedData;
-                    const locationText = 'Location: ' + latitude.toFixed(6) + ', ' + longitude.toFixed(6);
+                    const locationText = `Location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} (Accuracy: ${accuracy.toFixed(1)}m)`;
                     const computedHash = await sha256(locationText);
                     const isVerified = computedHash === hash;
                     addMessage(locationText, sender, false, isVerified, false, null, '', true, latitude, longitude);
                     if (!isVerified) {
-                        console.log('Location integrity failed');
-                        alert('Location integrity failed');
+                        alert('Warning: Location integrity check failed!');
                     } else {
-                        console.log('Location received');
-                        alert('Location received');
-                    }
-                } else if (parsedData.type === 'status') {
-                    const { sender, online } = parsedData;
-                    peerStatus[conn.peer] = online;
-                    updatePeerList();
-                    if (online) {
-                        console.log('Peer online');
-                        alert('Peer online');
-                    } else {
-                        console.log('Peer offline');
-                        alert('Peer offline');
+                        alert('Location received successfully! Accuracy: ' + accuracy.toFixed(1) + ' meters');
                     }
                 }
             });
 
             conn.on('close', () => {
-                status.textContent = isOnline ? 'Online' : 'Offline';
+                status.textContent = 'Online';
                 messageInput.disabled = false;
                 sendButton.disabled = false;
                 fileButton.disabled = false;
@@ -988,15 +947,16 @@
                 connectButton.disabled = false;
                 disconnectButton.style.display = 'none';
                 endCall();
-                console.log('Connection closed');
-                alert('Connection closed');
+                alert('Peer disconnected');
                 peerStatus[conn.peer] = false;
                 updatePeerList();
             });
 
             conn.on('error', (err) => {
                 console.error('Connection error:', err);
-                status.textContent = 'Connection error';
+                status.textContent = 'Error: ' + err.message;
+                peerStatus[conn.peer] = false;
+                updatePeerList();
             });
         }
 
@@ -1005,12 +965,11 @@
             peerIdInput.select();
             navigator.clipboard.writeText(peerIdInput.value)
                 .then(() => {
-                    console.log('ID copied');
-                    alert('ID copied');
+                    alert('Peer ID copied to clipboard!');
                 })
                 .catch((err) => {
-                    console.error('Copy failed:', err);
-                    alert('Copy failed');
+                    console.error('Failed to copy:', err);
+                    alert('Failed to copy ID');
                 });
         });
 
@@ -1025,20 +984,85 @@
         locationButton.addEventListener('click', shareLocation);
 
         // Handle PeerJS errors
-        peer.on('error', (err) => {
-            console.error('PeerJS error:', err);
-            status.textContent = 'PeerJS error';
-        });
+        if (peer) {
+            peer.on('error', (err) => {
+                console.error('PeerJS error:', err);
+                status.textContent = 'Error: ' + err.type;
+            });
+        }
 
-        // Online/offline event listeners with debounce
-        window.addEventListener('focus', () => {
+        // Online/offline event listeners
+        window.addEventListener('online', () => {
             isOnline = true;
-            debouncedUpdateStatus();
+            if (!peer) {
+                peer = new Peer(myPeerId);
+                peer.on('open', (id) => {
+                    peerIdInput.value = id;
+                    updateStatus();
+                    updatePeerList();
+                    setInterval(checkPeerStatus, 30000);
+                });
+                peer.on('connection', (connection) => {
+                    if (connection.metadata?.ping) {
+                        peerStatus[connection.peer] = true;
+                        connection.close();
+                        updatePeerList();
+                        return;
+                    }
+                    conn = connection;
+                    setupConnection();
+                });
+                peer.on('call', (incomingCall) => {
+                    navigator.mediaDevices.getUserMedia({ audio: true })
+                        .then((stream) => {
+                            localStream = stream;
+                            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                            sourceNode = audioContext.createMediaStreamSource(localStream);
+                            filterNode = audioContext.createBiquadFilter();
+                            filterNode.type = 'lowpass';
+                            filterNode.frequency.value = 3000;
+                            sourceNode.connect(filterNode);
+                            filterNode.connect(audioContext.destination);
+
+                            const filteredStream = audioContext.createMediaStreamDestination().stream;
+                            sourceNode.connect(audioContext.createMediaStreamDestination());
+
+                            call = incomingCall;
+                            call.answer(filteredStream);
+                            call.on('stream', (remoteStream) => {
+                                const audio = new Audio();
+                                audio.srcObject = remoteStream;
+                                audio.play();
+                                alert('Call received and answered!');
+                                endCallButton.style.display = 'inline-block';
+                                callButton.disabled = true;
+                            });
+                            call.on('close', () => {
+                                endCall();
+                            });
+                            call.on('error', (err) => {
+                                console.error('Call error:', err);
+                                alert('Call error: ' + err.message);
+                                endCall();
+                            });
+                        })
+                        .catch((err) => {
+                            console.error('Media error:', err);
+                            alert('Failed to answer call: ' + err.message);
+                        });
+                });
+            }
+            updateStatus();
         });
 
-        window.addEventListener('blur', () => {
+        window.addEventListener('offline', () => {
             isOnline = false;
-            debouncedUpdateStatus();
+            if (conn) conn.close();
+            if (peer) peer.destroy();
+            peer = null;
+            conn = null;
+            endCall();
+            updateStatus();
         });
 
         // Theme toggle
@@ -1064,7 +1088,6 @@
 
         // Initial load
         loadMessages();
-        updateStatus();
     </script>
 </body>
 </html>
