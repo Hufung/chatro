@@ -275,7 +275,7 @@
             color: var(--text-color);
         }
         .peer-item.online {
-            color: #2e7d32;
+            Coyote color: #2e7d32;
         }
         .peer-item.offline {
             color: #d32f2f;
@@ -416,11 +416,11 @@
         // Encode text to prevent XSS
         function encodeHTML(text) {
             return text
-                .replace(/&/g, '&')
-                .replace(/</g, '<')
-                .replace(/>/g, '>')
-                .replace(/"/g, '"')
-                .replace(/'/g, ''');
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
         }
 
         // SHA-256 hashing function
@@ -572,7 +572,7 @@
             reader.readAsArrayBuffer(file);
         }
 
-        // Share location with high-accuracy GPS
+        // Share location with improved accuracy
         async function shareLocation() {
             if (!isOnline || !conn || !conn.open) {
                 alert('Cannot share location while offline or not connected.');
@@ -586,7 +586,7 @@
             navigator.geolocation.getCurrentPosition(
                 async (position) => {
                     const { latitude, longitude, accuracy } = position.coords;
-                    const locationText = `Location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} (Accuracy: ${accuracy.toFixed(1)} meters)`;
+                    const locationText = `Location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} (Accuracy: ${accuracy.toFixed(1)}m)`;
                     const hash = await sha256(locationText);
                     const data = JSON.stringify({ 
                         type: 'location', 
@@ -598,7 +598,7 @@
                     });
                     conn.send(data);
                     addMessage(locationText, currentUser, true, true, false, null, '', true, latitude, longitude);
-                    alert('Location shared successfully!');
+                    alert('Location shared successfully! Accuracy: ' + accuracy.toFixed(1) + ' meters');
                 },
                 (error) => {
                     let errorMessage = 'Failed to share location: ';
@@ -607,10 +607,10 @@
                             errorMessage += 'Permission denied.';
                             break;
                         case error.POSITION_UNAVAILABLE:
-                            errorMessage += 'Location unavailable. Ensure GPS is enabled.';
+                            errorMessage += 'Location unavailable.';
                             break;
                         case error.TIMEOUT:
-                            errorMessage += 'Request timed out. Try again for a more accurate fix.';
+                            errorMessage += 'Request timed out. Try again for better accuracy.';
                             break;
                         default:
                             errorMessage += 'Unknown error.';
@@ -618,9 +618,9 @@
                     alert(errorMessage);
                 },
                 {
-                    enableHighAccuracy: true, // Request GPS-level accuracy
-                    timeout: 10000,           // Wait up to 10 seconds for a fix
-                    maximumAge: 0             // Force a fresh location, no caching
+                    enableHighAccuracy: true, // Request GPS for higher accuracy
+                    maximumAge: 0,           // No cached position
+                    timeout: 10000           // 10-second timeout
                 }
             );
         }
@@ -925,14 +925,14 @@
                     }
                 } else if (parsedData.type === 'location') {
                     const { sender, latitude, longitude, accuracy, hash } = parsedData;
-                    const locationText = `Location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} (Accuracy: ${accuracy.toFixed(1)} meters)`;
+                    const locationText = `Location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} (Accuracy: ${accuracy.toFixed(1)}m)`;
                     const computedHash = await sha256(locationText);
                     const isVerified = computedHash === hash;
                     addMessage(locationText, sender, false, isVerified, false, null, '', true, latitude, longitude);
                     if (!isVerified) {
                         alert('Warning: Location integrity check failed!');
                     } else {
-                        alert('Location received successfully!');
+                        alert('Location received successfully! Accuracy: ' + accuracy.toFixed(1) + ' meters');
                     }
                 }
             });
