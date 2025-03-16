@@ -416,11 +416,11 @@
         // Encode text to prevent XSS
         function encodeHTML(text) {
             return text
-                .replace(/&/g, '&')
-                .replace(/</g, '<')
-                .replace(/>/g, '>')
-                .replace(/"/g, '"')
-                .replace(/'/g, ''');
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
         }
 
         // SHA-256 hashing function
@@ -435,7 +435,9 @@
         usernameInput.addEventListener('change', () => {
             currentUser = encodeHTML(usernameInput.value.trim()) || 'User_' + Math.random().toString(36).substr(2, 5);
             localStorage.setItem('chatUsername', currentUser);
-            addMessage('Username updated to "' + currentUser + '"', 'System', false);
+            const msg = 'Username updated to "' + currentUser + '"';
+            console.log('Updating username:', msg);
+            addMessage(msg, 'System', false);
         });
 
         // Load or generate persistent PeerJS ID
@@ -522,7 +524,8 @@
             chatMessages.innerHTML = '';
             messages = [];
             localStorage.setItem('chatMessages', JSON.stringify(messages));
-            alert('Chatroom cleared.');
+            console.log('Clearing chat');
+            alert('Chatroom cleared');
         }
 
         // Send text message with SHA-256 hash
@@ -537,9 +540,11 @@
                 } else {
                     addMessage(text, currentUser, true);
                     if (!isOnline) {
-                        alert('You are not active on the site. Message saved locally.');
+                        console.log('Not active, saving locally');
+                        alert('Not active, message saved locally');
                     } else {
-                        alert('Not connected to a peer. Message saved locally.');
+                        console.log('Not connected, saving locally');
+                        alert('Not connected, message saved locally');
                     }
                 }
                 messageInput.value = '';
@@ -563,13 +568,16 @@
                 if (conn && conn.open) {
                     conn.send(data);
                     addMessage('Sent file: ' + fileName, currentUser, true, true, true, URL.createObjectURL(file), fileName);
-                    alert('File sent successfully!');
+                    console.log('File sent:', fileName);
+                    alert('File sent successfully');
                 } else {
-                    addMessage('File "' + fileName + '" saved locally.', currentUser, true, true, true, URL.createObjectURL(file), fileName);
+                    addMessage('File "' + fileName + '" saved locally', currentUser, true, true, true, URL.createObjectURL(file), fileName);
                     if (!isOnline) {
-                        alert('You are not active on the site. File saved locally.');
+                        console.log('Not active, file saved locally:', fileName);
+                        alert('Not active, file saved locally');
                     } else {
-                        alert('Not connected to a peer. File saved locally.');
+                        console.log('Not connected, file saved locally:', fileName);
+                        alert('Not connected, file saved locally');
                     }
                 }
             };
@@ -579,11 +587,13 @@
         // Share location with improved accuracy
         async function shareLocation() {
             if (!conn || !conn.open) {
-                alert('Cannot share location while not connected.');
+                console.log('Cannot share location, not connected');
+                alert('Cannot share location, not connected');
                 return;
             }
             if (!navigator.geolocation) {
-                alert('Geolocation is not supported by your browser.');
+                console.log('Geolocation not supported');
+                alert('Geolocation not supported');
                 return;
             }
 
@@ -602,23 +612,26 @@
                     });
                     conn.send(data);
                     addMessage(locationText, currentUser, true, true, false, null, '', true, latitude, longitude);
-                    alert('Location shared successfully! Accuracy: ' + accuracy.toFixed(1) + ' meters');
+                    const locationMsg = 'Location shared successfully, accuracy: ' + accuracy.toFixed(1) + ' meters';
+                    console.log(locationMsg);
+                    alert(locationMsg);
                 },
                 (error) => {
                     let errorMessage = 'Failed to share location: ';
                     switch (error.code) {
                         case error.PERMISSION_DENIED:
-                            errorMessage += 'Permission denied.';
+                            errorMessage += 'Permission denied';
                             break;
                         case error.POSITION_UNAVAILABLE:
-                            errorMessage += 'Location unavailable.';
+                            errorMessage += 'Location unavailable';
                             break;
                         case error.TIMEOUT:
-                            errorMessage += 'Request timed out. Try again for better accuracy.';
+                            errorMessage += 'Request timed out';
                             break;
                         default:
-                            errorMessage += 'Unknown error.';
+                            errorMessage += 'Unknown error';
                     }
+                    console.log(errorMessage);
                     alert(errorMessage);
                 },
                 {
@@ -646,7 +659,8 @@
         // Start audio call with noise reduction
         async function startCall() {
             if (!conn || !conn.open) {
-                alert('Cannot start call while not connected.');
+                console.log('Cannot start call, not connected');
+                alert('Cannot start call, not connected');
                 return;
             }
 
@@ -668,7 +682,8 @@
                     const audio = new Audio();
                     audio.srcObject = remoteStream;
                     audio.play();
-                    alert('Call started!');
+                    console.log('Call started');
+                    alert('Call started');
                     endCallButton.style.display = 'inline-block';
                     callButton.disabled = true;
                 });
@@ -678,7 +693,6 @@
                 call.on('error', (err) => {
                     console.error('Call error: ', err);
                     alert('Call error: ' + err.message);
-                    endCall();
                 });
             } catch (err) {
                 console.error('Media error: ', err);
@@ -702,7 +716,8 @@
                 sourceNode = null;
                 filterNode = null;
             }
-            alert('Call ended.');
+            console.log('Call ended');
+            alert('Call ended');
             endCallButton.style.display = 'none';
             callButton.disabled = !conn || !conn.open;
         }
@@ -771,9 +786,11 @@
             endCallButton.style.display = (call && call.open) ? 'inline-block' : 'none';
             locationButton.disabled = !conn || !conn.open;
             if (!isOnline) {
-                alert('You are no longer active on the site.');
+                console.log('User went offline');
+                alert('User went offline');
             } else {
-                alert('You are now active on the site!');
+                console.log('User came online');
+                alert('User came online');
             }
             sendOnlineStatus();
             checkPeerStatus();
@@ -785,9 +802,9 @@
         peer.on('open', (id) => {
             peerIdInput.value = id;
             status.textContent = isOnline ? 'Online' : 'Offline';
-            alert('Welcome! Please set your username in the header above.');
-            alert('Share your Peer ID with someone to chat!');
-            console.log('Peer ID: ' + id);
+            console.log('Peer opened, ID:', id);
+            alert('Welcome! Set your username above');
+            alert('Share your Peer ID to chat');
             loadMessages();
             updatePeerList();
             setInterval(checkPeerStatus, 30000);
@@ -814,7 +831,8 @@
                         const audio = new Audio();
                         audio.srcObject = remoteStream;
                         audio.play();
-                        alert('Call received and answered!');
+                        console.log('Call received and answered');
+                        alert('Call received and answered');
                         endCallButton.style.display = 'inline-block';
                         callButton.disabled = true;
                     });
@@ -824,7 +842,6 @@
                     call.on('error', (err) => {
                         console.error('Call error: ', err);
                         alert('Call error: ' + err.message);
-                        endCall();
                     });
                 })
                 .catch((err) => {
@@ -847,7 +864,9 @@
             knownPeers[conn.peer] = peerName;
             localStorage.setItem('knownPeers', JSON.stringify(knownPeers));
             updatePeerList();
-            alert('Incoming connection from ' + peerName + ' (' + conn.peer + ')');
+            const connMsg = 'Incoming connection from ' + peerName + ' (' + conn.peer + ')';
+            console.log(connMsg);
+            alert(connMsg);
         });
 
         // Connect to another peer
@@ -877,7 +896,8 @@
                 callButton.disabled = false;
                 connectButton.disabled = false;
                 disconnectButton.style.display = 'none';
-                alert('You disconnected from the peer');
+                console.log('Disconnected from peer');
+                alert('Disconnected from peer');
                 checkPeerStatus();
             }
         });
@@ -893,7 +913,8 @@
                 locationButton.disabled = false;
                 connectButton.disabled = true;
                 disconnectButton.style.display = 'inline-block';
-                alert('Connected to peer!');
+                console.log('Connected to peer');
+                alert('Connected to peer');
                 peerStatus[conn.peer] = true;
                 sendOnlineStatus();
                 updatePeerList();
@@ -912,7 +933,8 @@
                     const isVerified = computedHash === hash;
                     addMessage(text, sender, false, isVerified);
                     if (!isVerified) {
-                        alert('Warning: Message integrity check failed!');
+                        console.log('Text integrity check failed');
+                        alert('Text integrity check failed');
                     }
                 } else if (parsedData.type === 'file') {
                     const { sender, fileName, fileData, hash } = parsedData;
@@ -923,9 +945,11 @@
                     const url = URL.createObjectURL(blob);
                     addMessage('Received file: ' + fileName, sender, false, isVerified, true, url, fileName);
                     if (!isVerified) {
-                        alert('Warning: File integrity check failed!');
+                        console.log('File integrity check failed');
+                        alert('File integrity check failed');
                     } else {
-                        alert('File received successfully!');
+                        console.log('File received:', fileName);
+                        alert('File received successfully');
                     }
                 } else if (parsedData.type === 'location') {
                     const { sender, latitude, longitude, accuracy, hash } = parsedData;
@@ -934,21 +958,25 @@
                     const isVerified = computedHash === hash;
                     addMessage(locationText, sender, false, isVerified, false, null, '', true, latitude, longitude);
                     if (!isVerified) {
-                        alert('Warning: Location integrity check failed!');
+                        console.log('Location integrity check failed');
+                        alert('Location integrity check failed');
                     } else {
-                        alert('Location received successfully! Accuracy: ' + accuracy.toFixed(1) + ' meters');
+                        const locMsg = 'Location received, accuracy: ' + accuracy.toFixed(1) + ' meters';
+                        console.log(locMsg);
+                        alert(locMsg);
                     }
                 } else if (parsedData.type === 'status') {
                     const { sender, online } = parsedData;
                     peerStatus[conn.peer] = online;
                     updatePeerList();
-                    let statusMessage;
+                    let statusMsg;
                     if (online) {
-                        statusMessage = sender + ' is now online';
+                        statusMsg = 'Peer is now online: ' + sender;
                     } else {
-                        statusMessage = sender + ' is now offline';
+                        statusMsg = 'Peer is now offline: ' + sender;
                     }
-                    alert(statusMessage);
+                    console.log(statusMsg);
+                    alert(statusMsg);
                 }
             });
 
@@ -962,6 +990,7 @@
                 connectButton.disabled = false;
                 disconnectButton.style.display = 'none';
                 endCall();
+                console.log('Peer disconnected');
                 alert('Peer disconnected');
                 peerStatus[conn.peer] = false;
                 updatePeerList();
@@ -980,7 +1009,8 @@
             peerIdInput.select();
             navigator.clipboard.writeText(peerIdInput.value)
                 .then(() => {
-                    alert('Peer ID copied to clipboard!');
+                    console.log('Peer ID copied');
+                    alert('Peer ID copied');
                 })
                 .catch((err) => {
                     console.error('Failed to copy: ', err);
