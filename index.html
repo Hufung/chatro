@@ -416,11 +416,11 @@
         // Encode text to prevent XSS
         function encodeHTML(text) {
             return text
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
+                .replace(/&/g, '&')
+                .replace(/</g, '<')
+                .replace(/>/g, '>')
+                .replace(/"/g, '"')
+                .replace(/'/g, ''');
         }
 
         // SHA-256 hashing function
@@ -572,7 +572,7 @@
             reader.readAsArrayBuffer(file);
         }
 
-        // Share location
+        // Share location with high-accuracy GPS
         async function shareLocation() {
             if (!isOnline || !conn || !conn.open) {
                 alert('Cannot share location while offline or not connected.');
@@ -585,14 +585,15 @@
 
             navigator.geolocation.getCurrentPosition(
                 async (position) => {
-                    const { latitude, longitude } = position.coords;
-                    const locationText = `Location: ${latitude}, ${longitude}`;
+                    const { latitude, longitude, accuracy } = position.coords;
+                    const locationText = `Location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} (Accuracy: ${accuracy.toFixed(1)} meters)`;
                     const hash = await sha256(locationText);
                     const data = JSON.stringify({ 
                         type: 'location', 
                         sender: currentUser, 
                         latitude, 
                         longitude, 
+                        accuracy, 
                         hash 
                     });
                     conn.send(data);
@@ -606,15 +607,20 @@
                             errorMessage += 'Permission denied.';
                             break;
                         case error.POSITION_UNAVAILABLE:
-                            errorMessage += 'Location unavailable.';
+                            errorMessage += 'Location unavailable. Ensure GPS is enabled.';
                             break;
                         case error.TIMEOUT:
-                            errorMessage += 'Request timed out.';
+                            errorMessage += 'Request timed out. Try again for a more accurate fix.';
                             break;
                         default:
                             errorMessage += 'Unknown error.';
                     }
                     alert(errorMessage);
+                },
+                {
+                    enableHighAccuracy: true, // Request GPS-level accuracy
+                    timeout: 10000,           // Wait up to 10 seconds for a fix
+                    maximumAge: 0             // Force a fresh location, no caching
                 }
             );
         }
@@ -918,8 +924,8 @@
                         alert('File received successfully!');
                     }
                 } else if (parsedData.type === 'location') {
-                    const { sender, latitude, longitude, hash } = parsedData;
-                    const locationText = `Location: ${latitude}, ${longitude}`;
+                    const { sender, latitude, longitude, accuracy, hash } = parsedData;
+                    const locationText = `Location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} (Accuracy: ${accuracy.toFixed(1)} meters)`;
                     const computedHash = await sha256(locationText);
                     const isVerified = computedHash === hash;
                     addMessage(locationText, sender, false, isVerified, false, null, '', true, latitude, longitude);
