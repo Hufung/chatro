@@ -676,12 +676,12 @@
                     endCall();
                 });
                 call.on('error', (err) => {
-                    console.error('Call error:', err);
+                    console.error('Call error: ', err);
                     alert('Call error: ' + err.message);
                     endCall();
                 });
             } catch (err) {
-                console.error('Media error:', err);
+                console.error('Media error: ', err);
                 alert('Failed to access microphone: ' + err.message);
             }
         }
@@ -942,7 +942,13 @@
                     const { sender, online } = parsedData;
                     peerStatus[conn.peer] = online;
                     updatePeerList();
-                    alert(sender + ' is now ' + (online ? 'online' : 'offline')); // Fixed line
+                    let statusMessage;
+                    if (online) {
+                        statusMessage = sender + ' is now online';
+                    } else {
+                        statusMessage = sender + ' is now offline';
+                    }
+                    alert(statusMessage);
                 }
             });
 
