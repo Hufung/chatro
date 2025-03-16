@@ -275,7 +275,7 @@
             color: var(--text-color);
         }
         .peer-item.online {
-            Coyote color: #2e7d32;
+            color: #2e7d32;
         }
         .peer-item.offline {
             color: #d32f2f;
@@ -405,7 +405,7 @@
         let messages = JSON.parse(localStorage.getItem('chatMessages')) || [];
         let peer;
         let conn;
-        let isOnline = navigator.onLine;
+        let isOnline = document.hasFocus(); // Initially true if page is focused
         let peerStatus = {};
         let localStream;
         let call;
@@ -416,11 +416,11 @@
         // Encode text to prevent XSS
         function encodeHTML(text) {
             return text
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
+                .replace(/&/g, '&')
+                .replace(/</g, '<')
+                .replace(/>/g, '>')
+                .replace(/"/g, '"')
+                .replace(/'/g, ''');
         }
 
         // SHA-256 hashing function
@@ -531,13 +531,15 @@
             if (text) {
                 const hash = await sha256(text);
                 const data = JSON.stringify({ type: 'text', sender: currentUser, text, hash });
-                if (isOnline && conn && conn.open) {
+                if (conn && conn.open) {
                     conn.send(data);
                     addMessage(text, currentUser, true);
                 } else {
                     addMessage(text, currentUser, true);
                     if (!isOnline) {
-                        alert('You are offline. Message saved locally.');
+                        alert('You are not active on the site. Message saved locally.');
+                    } else {
+                        alert('Not connected to a peer. Message saved locally.');
                     }
                 }
                 messageInput.value = '';
@@ -558,14 +560,16 @@
                     fileData: Array.from(new Uint8Array(fileData)), 
                     hash 
                 });
-                if (isOnline && conn && conn.open) {
+                if (conn && conn.open) {
                     conn.send(data);
                     addMessage(`Sent file: ${fileName}`, currentUser, true, true, true, URL.createObjectURL(file), fileName);
                     alert('File sent successfully!');
                 } else {
-                    addMessage(`File "${fileName}" saved locally (offline).`, currentUser, true, true, true, URL.createObjectURL(file), fileName);
+                    addMessage(`File "${fileName}" saved locally.`, currentUser, true, true, true, URL.createObjectURL(file), fileName);
                     if (!isOnline) {
-                        alert('You are offline. File saved locally.');
+                        alert('You are not active on the site. File saved locally.');
+                    } else {
+                        alert('Not connected to a peer. File saved locally.');
                     }
                 }
             };
@@ -574,8 +578,8 @@
 
         // Share location with improved accuracy
         async function shareLocation() {
-            if (!isOnline || !conn || !conn.open) {
-                alert('Cannot share location while offline or not connected.');
+            if (!conn || !conn.open) {
+                alert('Cannot share location while not connected.');
                 return;
             }
             if (!navigator.geolocation) {
@@ -618,9 +622,9 @@
                     alert(errorMessage);
                 },
                 {
-                    enableHighAccuracy: true, // Request GPS for higher accuracy
-                    maximumAge: 0,           // No cached position
-                    timeout: 10000           // 10-second timeout
+                    enableHighAccuracy: true,
+                    maximumAge: 0,
+                    timeout: 10000
                 }
             );
         }
@@ -641,8 +645,8 @@
 
         // Start audio call with noise reduction
         async function startCall() {
-            if (!isOnline || !conn || !conn.open) {
-                alert('Cannot start call while offline or not connected.');
+            if (!conn || !conn.open) {
+                alert('Cannot start call while not connected.');
                 return;
             }
 
@@ -700,7 +704,7 @@
             }
             alert('Call ended.');
             endCallButton.style.display = 'none';
-            callButton.disabled = !isOnline || !conn || !conn.open;
+            callButton.disabled = !conn || !conn.open;
         }
 
         // Update peer list UI with online status
@@ -720,9 +724,21 @@
             }
         }
 
+        // Send online status to peers
+        function sendOnlineStatus() {
+            if (conn && conn.open) {
+                const data = JSON.stringify({ 
+                    type: 'status', 
+                    sender: currentUser, 
+                    online: isOnline 
+                });
+                conn.send(data);
+            }
+        }
+
         // Check peer online status
         function checkPeerStatus() {
-            if (!isOnline || !peer) return;
+            if (!peer) return;
             for (const id in knownPeers) {
                 if (id !== myPeerId && (!conn || conn.peer !== id)) {
                     const tempConn = peer.connect(id, { metadata: { name: currentUser, ping: true } });
@@ -736,7 +752,7 @@
                         updatePeerList();
                     });
                 } else if (conn && conn.peer === id && conn.open) {
-                    peerStatus[id] = true;
+                    peerStatus[id] = true; // Assume connected peer is online unless status says otherwise
                 } else {
                     peerStatus[id] = false;
                 }
@@ -745,110 +761,97 @@
 
         // Update online/offline status
         function updateStatus() {
-            isOnline = navigator.onLine;
             status.textContent = isOnline ? 'Online' : 'Offline';
-            connectButton.disabled = !isOnline || (conn && conn.open);
-            disconnectButton.style.display = (isOnline && conn && conn.open) ? 'inline-block' : 'none';
+            connectButton.disabled = (conn && conn.open);
+            disconnectButton.style.display = (conn && conn.open) ? 'inline-block' : 'none';
             messageInput.disabled = false;
             sendButton.disabled = false;
-            fileButton.disabled = !isOnline || !conn || !conn.open;
-            callButton.disabled = !isOnline || !conn || !conn.open || (call && call.open);
+            fileButton.disabled = !conn || !conn.open;
+            callButton.disabled = !conn || !conn.open || (call && call.open);
             endCallButton.style.display = (call && call.open) ? 'inline-block' : 'none';
-            locationButton.disabled = !isOnline || !conn || !conn.open;
+            locationButton.disabled = !conn || !conn.open;
             if (!isOnline) {
-                alert('You are offline. You can still write messages or save files locally.');
+                alert('You are no longer active on the site.');
             } else {
-                alert('You are back online!');
-                checkPeerStatus();
+                alert('You are now active on the site!');
             }
-        }
-
-        // Initialize PeerJS with persistent ID (if online)
-        if (isOnline) {
-            peer = new Peer(myPeerId);
-            peer.on('open', (id) => {
-                peerIdInput.value = id;
-                status.textContent = 'Online';
-                alert('Welcome! Please set your username in the header above.');
-                alert('Share your Peer ID with someone to chat!');
-                console.log('Peer ID:', id);
-                loadMessages();
-                updatePeerList();
-                setInterval(checkPeerStatus, 30000);
-            });
-
-            peer.on('call', (incomingCall) => {
-                navigator.mediaDevices.getUserMedia({ audio: true })
-                    .then((stream) => {
-                        localStream = stream;
-                        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                        sourceNode = audioContext.createMediaStreamSource(localStream);
-                        filterNode = audioContext.createBiquadFilter();
-                        filterNode.type = 'lowpass';
-                        filterNode.frequency.value = 3000;
-                        sourceNode.connect(filterNode);
-                        filterNode.connect(audioContext.destination);
-
-                        const filteredStream = audioContext.createMediaStreamDestination().stream;
-                        sourceNode.connect(audioContext.createMediaStreamDestination());
-
-                        call = incomingCall;
-                        call.answer(filteredStream);
-                        call.on('stream', (remoteStream) => {
-                            const audio = new Audio();
-                            audio.srcObject = remoteStream;
-                            audio.play();
-                            alert('Call received and answered!');
-                            endCallButton.style.display = 'inline-block';
-                            callButton.disabled = true;
-                        });
-                        call.on('close', () => {
-                            endCall();
-                        });
-                        call.on('error', (err) => {
-                            console.error('Call error:', err);
-                            alert('Call error: ' + err.message);
-                            endCall();
-                        });
-                    })
-                    .catch((err) => {
-                        console.error('Media error:', err);
-                        alert('Failed to answer call: ' + err.message);
-                    });
-            });
-        } else {
-            peerIdInput.value = myPeerId;
-            status.textContent = 'Offline';
-            alert('You are offline. Set your username and write messages or save files locally.');
-            loadMessages();
+            sendOnlineStatus();
+            checkPeerStatus();
             updatePeerList();
         }
 
+        // Initialize PeerJS with persistent ID
+        peer = new Peer(myPeerId);
+        peer.on('open', (id) => {
+            peerIdInput.value = id;
+            status.textContent = isOnline ? 'Online' : 'Offline';
+            alert('Welcome! Please set your username in the header above.');
+            alert('Share your Peer ID with someone to chat!');
+            console.log('Peer ID:', id);
+            loadMessages();
+            updatePeerList();
+            setInterval(checkPeerStatus, 30000);
+        });
+
+        peer.on('call', (incomingCall) => {
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then((stream) => {
+                    localStream = stream;
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    sourceNode = audioContext.createMediaStreamSource(localStream);
+                    filterNode = audioContext.createBiquadFilter();
+                    filterNode.type = 'lowpass';
+                    filterNode.frequency.value = 3000;
+                    sourceNode.connect(filterNode);
+                    filterNode.connect(audioContext.destination);
+
+                    const filteredStream = audioContext.createMediaStreamDestination().stream;
+                    sourceNode.connect(audioContext.createMediaStreamDestination());
+
+                    call = incomingCall;
+                    call.answer(filteredStream);
+                    call.on('stream', (remoteStream) => {
+                        const audio = new Audio();
+                        audio.srcObject = remoteStream;
+                        audio.play();
+                        alert('Call received and answered!');
+                        endCallButton.style.display = 'inline-block';
+                        callButton.disabled = true;
+                    });
+                    call.on('close', () => {
+                        endCall();
+                    });
+                    call.on('error', (err) => {
+                        console.error('Call error:', err);
+                        alert('Call error: ' + err.message);
+                        endCall();
+                    });
+                })
+                .catch((err) => {
+                    console.error('Media error:', err);
+                    alert('Failed to answer call: ' + err.message);
+                });
+        });
+
         // Handle incoming connections
-        if (peer) {
-            peer.on('connection', (connection) => {
-                if (connection.metadata?.ping) {
-                    peerStatus[connection.peer] = true;
-                    connection.close();
-                    updatePeerList();
-                    return;
-                }
-                conn = connection;
-                setupConnection();
-                const peerName = conn.metadata?.name || 'Unknown';
-                knownPeers[conn.peer] = peerName;
-                localStorage.setItem('knownPeers', JSON.stringify(knownPeers));
+        peer.on('connection', (connection) => {
+            if (connection.metadata?.ping) {
+                peerStatus[connection.peer] = true;
+                connection.close();
                 updatePeerList();
-                alert(`Incoming connection from ${peerName} (${conn.peer})`);
-            });
-        }
+                return;
+            }
+            conn = connection;
+            setupConnection();
+            const peerName = conn.metadata?.name || 'Unknown';
+            knownPeers[conn.peer] = peerName;
+            localStorage.setItem('knownPeers', JSON.stringify(knownPeers));
+            updatePeerList();
+            alert(`Incoming connection from ${peerName} (${conn.peer})`);
+        });
 
         // Connect to another peer
         connectButton.addEventListener('click', () => {
-            if (!isOnline) {
-                alert('Cannot connect while offline.');
-                return;
-            }
             const remoteId = remoteIdInput.value.trim();
             const peerName = encodeHTML(peerNameInput.value.trim()) || 'Unknown';
             if (remoteId && remoteId !== myPeerId) {
@@ -867,7 +870,7 @@
             if (conn && conn.open) {
                 conn.close();
                 endCall();
-                status.textContent = 'Online';
+                status.textContent = isOnline ? 'Online' : 'Offline';
                 messageInput.disabled = false;
                 sendButton.disabled = false;
                 fileButton.disabled = false;
@@ -892,6 +895,7 @@
                 disconnectButton.style.display = 'inline-block';
                 alert('Connected to peer!');
                 peerStatus[conn.peer] = true;
+                sendOnlineStatus();
                 updatePeerList();
                 if (conn.metadata?.name) {
                     knownPeers[conn.peer] = conn.metadata.name;
@@ -934,11 +938,16 @@
                     } else {
                         alert('Location received successfully! Accuracy: ' + accuracy.toFixed(1) + ' meters');
                     }
+                } else if (parsedData.type === 'status') {
+                    const { sender, online } = parsedData;
+                    peerStatus[conn.peer] = online;
+                    updatePeerList();
+                    alert(`${sender} is now ${online ? 'online' : 'offline'}`);
                 }
             });
 
             conn.on('close', () => {
-                status.textContent = 'Online';
+                status.textContent = isOnline ? 'Online' : 'Offline';
                 messageInput.disabled = false;
                 sendButton.disabled = false;
                 fileButton.disabled = false;
@@ -984,86 +993,24 @@
         locationButton.addEventListener('click', shareLocation);
 
         // Handle PeerJS errors
-        if (peer) {
-            peer.on('error', (err) => {
-                console.error('PeerJS error:', err);
-                status.textContent = 'Error: ' + err.type;
-            });
-        }
+        peer.on('error', (err) => {
+            console.error('PeerJS error:', err);
+            status.textContent = 'Error: ' + err.type;
+        });
 
-        // Online/offline event listeners
-        window.addEventListener('online', () => {
+        // Online/offline event listeners based on window focus
+        window.addEventListener('focus', () => {
             isOnline = true;
-            if (!peer) {
-                peer = new Peer(myPeerId);
-                peer.on('open', (id) => {
-                    peerIdInput.value = id;
-                    updateStatus();
-                    updatePeerList();
-                    setInterval(checkPeerStatus, 30000);
-                });
-                peer.on('connection', (connection) => {
-                    if (connection.metadata?.ping) {
-                        peerStatus[connection.peer] = true;
-                        connection.close();
-                        updatePeerList();
-                        return;
-                    }
-                    conn = connection;
-                    setupConnection();
-                });
-                peer.on('call', (incomingCall) => {
-                    navigator.mediaDevices.getUserMedia({ audio: true })
-                        .then((stream) => {
-                            localStream = stream;
-                            audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                            sourceNode = audioContext.createMediaStreamSource(localStream);
-                            filterNode = audioContext.createBiquadFilter();
-                            filterNode.type = 'lowpass';
-                            filterNode.frequency.value = 3000;
-                            sourceNode.connect(filterNode);
-                            filterNode.connect(audioContext.destination);
-
-                            const filteredStream = audioContext.createMediaStreamDestination().stream;
-                            sourceNode.connect(audioContext.createMediaStreamDestination());
-
-                            call = incomingCall;
-                            call.answer(filteredStream);
-                            call.on('stream', (remoteStream) => {
-                                const audio = new Audio();
-                                audio.srcObject = remoteStream;
-                                audio.play();
-                                alert('Call received and answered!');
-                                endCallButton.style.display = 'inline-block';
-                                callButton.disabled = true;
-                            });
-                            call.on('close', () => {
-                                endCall();
-                            });
-                            call.on('error', (err) => {
-                                console.error('Call error:', err);
-                                alert('Call error: ' + err.message);
-                                endCall();
-                            });
-                        })
-                        .catch((err) => {
-                            console.error('Media error:', err);
-                            alert('Failed to answer call: ' + err.message);
-                        });
-                });
-            }
             updateStatus();
         });
 
-        window.addEventListener('offline', () => {
+        window.addEventListener('blur', () => {
             isOnline = false;
-            if (conn) conn.close();
-            if (peer) peer.destroy();
-            peer = null;
-            conn = null;
-            endCall();
             updateStatus();
         });
+
+        // Remove network-based online/offline listeners
+        // window.addEventListener('online', ...) and window.addEventListener('offline', ...) are removed
 
         // Theme toggle
         themeToggle.addEventListener('click', () => {
@@ -1088,6 +1035,7 @@
 
         // Initial load
         loadMessages();
+        updateStatus();
     </script>
 </body>
 </html>
