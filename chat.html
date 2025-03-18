@@ -773,7 +773,7 @@
                 peerIdInput.value = id;
                 status.textContent = 'Online';
                 alert('Welcome! Please set your username in the header above.');
-                alert('Share your Peer ID with someone to chat!');
+                alert('Share your Chatro ID with someone to chat!');
                 console.log('Peer ID:', id);
                 loadMessages();
                 updatePeerList();
@@ -877,7 +877,7 @@
                 callButton.disabled = false;
                 connectButton.disabled = false;
                 disconnectButton.style.display = 'none';
-                alert('You disconnected from the peer');
+                alert('You disconnected from Chatro.');
                 checkPeerStatus();
             }
         });
@@ -968,7 +968,7 @@
             peerIdInput.select();
             navigator.clipboard.writeText(peerIdInput.value)
                 .then(() => {
-                    alert('Peer ID copied to clipboard!');
+                    alert('Chatro ID copied to clipboard!');
                 })
                 .catch((err) => {
                     console.error('Failed to copy:', err);
