@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatro - Welcome</title>
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7816501206024146"
+     crossorigin="anonymous"></script>
+    <style>
+        :root {
+            --bg-body: linear-gradient(135deg, #e0e7ff, #f3e8ff);
+            --bg-container: white;
+            --text-color: #333;
+            --header-bg: linear-gradient(90deg, #075e54, #128c7e);
+            --shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            --button-bg: #4CAF50;
+            --button-hover: #45a049;
+        }
+        [data-theme="dark"] {
+            --bg-body: linear-gradient(135deg, #2c2c2c, #3e3e3e);
+            --bg-container: #1e1e1e;
+            --text-color: #e0e0e0;
+            --header-bg: linear-gradient(90deg, #054d44, #0a7066);
+            --shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            --button-bg: #388E3C;
+            --button-hover: #2e7d32;
+        }
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: var(--bg-body);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: var(--text-color);
+        }
+        .home-container {
+            width: 90%;
+            max-width: 900px;
+            margin: 20px;
+            background: var(--bg-container);
+            border-radius: 15px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .header {
+            background: var(--header-bg);
+            color: white;
+            padding: 15px;
+            text-align: center;
+            font-size: clamp(1.5em, 5vw, 2em);
+            font-weight: 600;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .content {
+            padding: 20px;
+            font-size: clamp(1em, 3vw, 1.1em);
+            line-height: 1.6;
+        }
+        .content h2 {
+            color: var(--text-color);
+            margin-top: 20px;
+            font-size: clamp(1.2em, 4vw, 1.5em);
+        }
+        .content ul {
+            padding-left: 20px;
+        }
+        .content li {
+            margin: 10px 0;
+        }
+        .chat-button {
+            display: inline-block;
+            padding: 10px 20px;
+            background: var(--button-bg);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: clamp(0.9em, 3vw, 1em);
+            transition: background 0.3s;
+            margin-top: 20px;
+        }
+        .chat-button:hover {
+            background: var(--button-hover);
+        }
+        @media (max-width: 600px) {
+            .home-container {
+                margin: 10px;
+            }
+            .header {
+                padding: 10px;
+            }
+            .content {
+                padding: 15px;
+            }
+            .chat-button {
+                padding: 8px 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="home-container">
+        <div class="header">
+            <h1>Welcome to Chatro</h1>
+        </div>
+        <div class="content">
+            <p>Chatro is a safe chatting method with your friends and family. Designed with privacy and security in mind, Chatro lets you connect seamlessly through text messages, file sharing, voice calls, and location sharing—all while keeping your conversations protected.</p>
+            
+            <h2>Key Features</h2>
+            <ul>
+                <li><strong>Secure Messaging:</strong> Send text messages with SHA-256 hashing to ensure message integrity.</li>
+                <li><strong>File Sharing:</strong> Share images, documents, and more with your peers securely.</li>
+                <li><strong>Voice Calls:</strong> Enjoy noise-reduced audio calls using WebRTC and audio filtering.</li>
+                <li><strong>Location Sharing:</strong> Share your precise location with high-accuracy geolocation.</li>
+                <li><strong>Peer-to-Peer:</strong> Connect directly with others using PeerJS for decentralized communication.</li>
+            </ul>
+
+            <h2>Techniques Used</h2>
+            <ul>
+                <li><strong>SHA-256 Hashing:</strong> Verifies the integrity of messages and files to prevent tampering.</li>
+                <li><strong>PeerJS:</strong> Enables peer-to-peer connections for real-time chat and calls without a central server.</li>
+                <li><strong>WebRTC:</strong> Powers secure, real-time voice communication with noise reduction filters.</li>
+                <li><strong>LocalStorage:</strong> Stores your messages, username, and peer list for persistence across sessions.</li>
+                <li><strong>Responsive Design:</strong> Adapts to any device with CSS clamp and media queries.</li>
+            </ul>
+
+            <a href="index.html" class="chat-button">Start Chatting Now</a>
+        </div>
+    </div>
+
+    <script>
+        // Load saved theme from localStorage
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        }
+    </script>
+</body>
+</html>
