@@ -15,6 +15,8 @@
             --shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
             --button-bg: #4CAF50;
             --button-hover: #45a049;
+            --accent-color: #ff6f61;
+            --secondary-bg: rgba(255, 255, 255, 0.9);
         }
         [data-theme="dark"] {
             --bg-body: linear-gradient(135deg, #2c2c2c, #3e3e3e);
@@ -24,6 +26,8 @@
             --shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
             --button-bg: #388E3C;
             --button-hover: #2e7d32;
+            --accent-color: #ff8a80;
+            --secondary-bg: rgba(30, 30, 30, 0.9);
         }
         body {
             font-family: 'Segoe UI', Arial, sans-serif;
@@ -35,71 +39,169 @@
             justify-content: center;
             align-items: center;
             color: var(--text-color);
+            overflow-x: hidden;
         }
         .home-container {
             width: 90%;
-            max-width: 900px;
+            max-width: 1000px;
             margin: 20px;
             background: var(--bg-container);
-            border-radius: 15px;
+            border-radius: 20px;
             box-shadow: var(--shadow);
             overflow: hidden;
-            display: flex;
-            flex-direction: column;
+            position: relative;
+            animation: fadeIn 1s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
         }
         .header {
             background: var(--header-bg);
             color: white;
-            padding: 15px;
+            padding: 40px 20px;
             text-align: center;
-            font-size: clamp(1.5em, 5vw, 2em);
-            font-weight: 600;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.2), transparent);
+            animation: pulse 10s infinite;
+            z-index: 0;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.2); opacity: 0.2; }
+            100% { transform: scale(1); opacity: 0.5; }
+        }
+        .header h1 {
+            font-size: clamp(2em, 6vw, 3em);
+            font-weight: 700;
+            margin: 0;
+            position: relative;
+            z-index: 1;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        .header p {
+            font-size: clamp(1em, 3vw, 1.2em);
+            margin: 10px 0 0;
+            opacity: 0.9;
+            position: relative;
+            z-index: 1;
         }
         .content {
-            padding: 20px;
-            font-size: clamp(1em, 3vw, 1.1em);
+            padding: 30px;
+            background: var(--secondary-bg);
+            backdrop-filter: blur(5px);
+            border-radius: 0 0 20px 20px;
+        }
+        .intro {
+            text-align: center;
+            font-size: clamp(1.1em, 3.5vw, 1.3em);
             line-height: 1.6;
-        }
-        .content h2 {
+            margin-bottom: 40px;
             color: var(--text-color);
-            margin-top: 20px;
-            font-size: clamp(1.2em, 4vw, 1.5em);
+            animation: slideUp 0.8s ease-out;
         }
-        .content ul {
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .section {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: space-between;
+            margin-bottom: 40px;
+        }
+        .card {
+            flex: 1;
+            min-width: 280px;
+            background: var(--bg-container);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: var(--shadow);
+            transition: transform 0.3s, box-shadow 0.3s;
+            animation: cardFadeIn 1s ease-in-out;
+        }
+        .card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+        }
+        @keyframes cardFadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .card h2 {
+            color: var(--accent-color);
+            font-size: clamp(1.3em, 4vw, 1.6em);
+            margin: 0 0 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .card h2::before {
+            content: '✨';
+            font-size: 1.2em;
+        }
+        .card ul {
             padding-left: 20px;
+            list-style: none;
         }
-        .content li {
-            margin: 10px 0;
+        .card li {
+            margin: 12px 0;
+            position: relative;
+            padding-left: 25px;
+            font-size: clamp(0.9em, 3vw, 1em);
+        }
+        .card li::before {
+            content: '✔';
+            color: var(--button-bg);
+            position: absolute;
+            left: 0;
+            font-size: 1.1em;
         }
         .chat-button {
-            display: inline-block;
-            padding: 10px 20px;
+            display: block;
+            width: max-content;
+            margin: 0 auto;
+            padding: 15px 30px;
             background: var(--button-bg);
             color: white;
             border: none;
-            border-radius: 20px;
+            border-radius: 25px;
             cursor: pointer;
             text-decoration: none;
-            font-size: clamp(0.9em, 3vw, 1em);
-            transition: background 0.3s;
-            margin-top: 20px;
+            font-size: clamp(1em, 3.5vw, 1.2em);
+            font-weight: 600;
+            transition: background 0.3s, transform 0.3s;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
         }
         .chat-button:hover {
             background: var(--button-hover);
+            transform: scale(1.05);
         }
         @media (max-width: 600px) {
             .home-container {
                 margin: 10px;
             }
             .header {
-                padding: 10px;
+                padding: 30px 15px;
             }
             .content {
-                padding: 15px;
+                padding: 20px;
+            }
+            .section {
+                flex-direction: column;
             }
             .chat-button {
-                padding: 8px 15px;
+                padding: 12px 25px;
             }
         }
     </style>
@@ -108,29 +210,35 @@
     <div class="home-container">
         <div class="header">
             <h1>Welcome to Chatro</h1>
+            <p>Your Secure Connection to Friends and Family</p>
         </div>
         <div class="content">
-            <p>Chatro is a safe chatting method with your friends and family. Designed with privacy and security in mind, Chatro lets you connect seamlessly through text messages, file sharing, voice calls, and location sharing—all while keeping your conversations protected.</p>
+            <p class="intro">Chatro is a safe chatting method with your friends and family. Designed with cutting-edge technology, Chatro offers a delightful and secure way to stay connected through text, files, calls, and more.</p>
             
-            <h2>Key Features</h2>
-            <ul>
-                <li><strong>Secure Messaging:</strong> Send text messages with SHA-256 hashing to ensure message integrity.</li>
-                <li><strong>File Sharing:</strong> Share images, documents, and more with your peers securely.</li>
-                <li><strong>Voice Calls:</strong> Enjoy noise-reduced audio calls using WebRTC and audio filtering.</li>
-                <li><strong>Location Sharing:</strong> Share your precise location with high-accuracy geolocation.</li>
-                <li><strong>Peer-to-Peer:</strong> Connect directly with others using PeerJS for decentralized communication.</li>
-            </ul>
+            <div class="section">
+                <div class="card">
+                    <h2>Key Features</h2>
+                    <ul>
+                        <li>Secure Messaging with integrity verification</li>
+                        <li>Effortless File Sharing for all your needs</li>
+                        <li>Crystal-Clear Voice Calls with noise reduction</li>
+                        <li>Precise Location Sharing with high accuracy</li>
+                        <li>Direct Peer-to-Peer Connections</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h2>Techniques Used</h2>
+                    <ul>
+                        <li>SHA-256 Hashing for tamper-proof messages</li>
+                        <li>PeerJS for decentralized, real-time chats</li>
+                        <li>WebRTC for seamless voice communication</li>
+                        <li>LocalStorage for persistent chat history</li>
+                        <li>Responsive Design for all devices</li>
+                    </ul>
+                </div>
+            </div>
 
-            <h2>Techniques Used</h2>
-            <ul>
-                <li><strong>SHA-256 Hashing:</strong> Verifies the integrity of messages and files to prevent tampering.</li>
-                <li><strong>PeerJS:</strong> Enables peer-to-peer connections for real-time chat and calls without a central server.</li>
-                <li><strong>WebRTC:</strong> Powers secure, real-time voice communication with noise reduction filters.</li>
-                <li><strong>LocalStorage:</strong> Stores your messages, username, and peer list for persistence across sessions.</li>
-                <li><strong>Responsive Design:</strong> Adapts to any device with CSS clamp and media queries.</li>
-            </ul>
-
-            <a href="chat.html" class="chat-button">Start Chatting Now</a>
+            <a href="index.html" class="chat-button">Start Chatting Now</a>
         </div>
     </div>
 
