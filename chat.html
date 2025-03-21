@@ -278,7 +278,7 @@
             color: var(--text-color);
         }
         .peer-item.online {
-            Coyote color: #2e7d32;
+            color: #2e7d32;
         }
         .peer-item.offline {
             color: #d32f2f;
@@ -621,9 +621,9 @@
                     alert(errorMessage);
                 },
                 {
-                    enableHighAccuracy: true, // Request GPS for higher accuracy
-                    maximumAge: 0,           // No cached position
-                    timeout: 10000           // 10-second timeout
+                    enableHighAccuracy: true,
+                    maximumAge: 0,
+                    timeout: 10000
                 }
             );
         }
@@ -734,8 +734,12 @@
                         tempConn.close();
                         updatePeerList();
                     });
-                    tempConn.on('error', () => {
-                        peerStatus[id] = false;
+                    tempConn.on('error', (err) => {
+                        if (err.type === 'peer-unavailable') {
+                            peerStatus[id] = false; // Silently mark as offline
+                        } else {
+                            console.error('Peer status check error:', err);
+                        }
                         updatePeerList();
                     });
                 } else if (conn && conn.peer === id && conn.open) {
@@ -860,8 +864,24 @@
                     knownPeers[remoteId] = peerName;
                 }
                 localStorage.setItem('knownPeers', JSON.stringify(knownPeers));
+
+                // Handle connection errors
+                conn.on('error', (err) => {
+                    if (err.type === 'peer-unavailable') {
+                        alert(`Peer "${remoteId}" is unavailable. They might be offline or the ID is incorrect.`);
+                        status.textContent = 'Online';
+                        peerStatus[remoteId] = false;
+                        updatePeerList();
+                    } else {
+                        console.error('Connection error:', err);
+                        status.textContent = 'Error: ' + err.message;
+                    }
+                });
+
                 setupConnection();
                 updatePeerList();
+            } else {
+                alert('Please enter a valid peer ID different from your own.');
             }
         });
 
@@ -990,7 +1010,12 @@
         if (peer) {
             peer.on('error', (err) => {
                 console.error('PeerJS error:', err);
-                status.textContent = 'Error: ' + err.type;
+                if (err.type === 'peer-unavailable') {
+                    // Handled in specific connection logic
+                } else {
+                    status.textContent = 'Error: ' + err.type;
+                    alert('A PeerJS error occurred: ' + err.type);
+                }
             });
         }
 
@@ -1092,5 +1117,5 @@
         // Initial load
         loadMessages();
     </script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9239e5da6d7cc997',t:'MTc0MjUyMjg2OC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
