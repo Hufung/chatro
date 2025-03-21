@@ -407,7 +407,7 @@
         // Load messages from localStorage
         let messages = JSON.parse(localStorage.getItem('chatMessages')) || [];
         let peer;
-        let conn;
+        let conn = null; // Initialize conn as null
         let isOnline = navigator.onLine;
         let peerStatus = {};
         let localStream;
@@ -778,7 +778,7 @@
                 status.textContent = 'Online';
                 alert('Welcome! Please set your username in the header above.');
                 alert('Share your Chatro ID with someone to chat!');
-                console.log('Peer ID:', id);
+                console.log('Peer ID initialized:', id);
                 loadMessages();
                 updatePeerList();
                 setInterval(checkPeerStatus, 30000);
@@ -860,8 +860,13 @@
             const remoteId = remoteIdInput.value.trim();
             const peerName = encodeHTML(peerNameInput.value.trim()) || 'Unknown';
             if (remoteId && remoteId !== myPeerId) {
+                if (conn && conn.open) {
+                    alert('Already connected to a peer. Disconnect first.');
+                    return;
+                }
                 console.log('Attempting to connect to:', remoteId);
                 conn = peer.connect(remoteId, { metadata: { name: currentUser } });
+                console.log('Connection object created:', conn);
                 if (!knownPeers[remoteId] || knownPeers[remoteId] === 'Unknown') {
                     knownPeers[remoteId] = peerName;
                 }
@@ -886,6 +891,7 @@
                 connectButton.disabled = false;
                 disconnectButton.style.display = 'none';
                 alert('You disconnected from Chatro.');
+                conn = null; // Reset conn
                 checkPeerStatus();
             }
         });
@@ -913,6 +919,7 @@
             });
 
             conn.on('data', async (data) => {
+                console.log('Data received from:', conn.peer);
                 const parsedData = JSON.parse(data);
                 if (parsedData.type === 'text') {
                     const { sender, text, hash } = parsedData;
@@ -963,6 +970,7 @@
                 alert('Peer disconnected');
                 peerStatus[conn.peer] = false;
                 updatePeerList();
+                conn = null; // Reset conn
             });
 
             conn.on('error', (err) => {
@@ -972,6 +980,7 @@
                     status.textContent = 'Online';
                     peerStatus[conn.peer] = false;
                     updatePeerList();
+                    conn = null; // Reset conn on error
                 } else {
                     status.textContent = 'Error: ' + err.message;
                 }
