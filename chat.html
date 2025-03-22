@@ -278,7 +278,7 @@
             color: var(--text-color);
         }
         .peer-item.online {
-            Coyote color: #2e7d32;
+            color: #2e7d32;
         }
         .peer-item.offline {
             color: #d32f2f;
@@ -395,6 +395,23 @@
         const peerList = document.getElementById('peer-list');
         const usernameInput = document.getElementById('username-input');
         const themeToggle = document.getElementById('theme-toggle');
+
+        // Request notification permission on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            if ('Notification' in window) {
+                Notification.requestPermission().then((permission) => {
+                    if (permission === 'granted') {
+                        console.log('Notification permission granted.');
+                    } else {
+                        console.log('Notification permission denied.');
+                        alert('Notifications are disabled. You won’t receive alerts for incoming connections.');
+                    }
+                });
+            } else {
+                console.log('Notifications not supported in this browser.');
+                alert('Your browser does not support notifications. You won’t receive alerts for incoming connections.');
+            }
+        });
 
         // Load or set username from localStorage
         let currentUser = localStorage.getItem('chatUsername') || '';
@@ -621,9 +638,9 @@
                     alert(errorMessage);
                 },
                 {
-                    enableHighAccuracy: true, // Request GPS for higher accuracy
-                    maximumAge: 0,           // No cached position
-                    timeout: 10000           // 10-second timeout
+                    enableHighAccuracy: true,
+                    maximumAge: 0,
+                    timeout: 10000
                 }
             );
         }
@@ -827,7 +844,7 @@
             updatePeerList();
         }
 
-        // Handle incoming connections
+        // Handle incoming connections with notification
         if (peer) {
             peer.on('connection', (connection) => {
                 if (connection.metadata?.ping) {
@@ -842,6 +859,34 @@
                 knownPeers[conn.peer] = peerName;
                 localStorage.setItem('knownPeers', JSON.stringify(knownPeers));
                 updatePeerList();
+
+                // Show notification for incoming connection
+                if ('Notification' in window && Notification.permission === 'granted') {
+                    const notification = new Notification('New Connection Request', {
+                        body: `Incoming connection from ${peerName} (${conn.peer})`,
+                        icon: 'https://hufung.github.io/images/chatro.svg',
+                        vibrate: [200, 100, 200],
+                    });
+                    notification.onclick = () => {
+                        window.focus();
+                        notification.close();
+                    };
+                } else if ('Notification' in window && Notification.permission !== 'denied') {
+                    Notification.requestPermission().then((permission) => {
+                        if (permission === 'granted') {
+                            const notification = new Notification('New Connection Request', {
+                                body: `Incoming connection from ${peerName} (${conn.peer})`,
+                                icon: 'https://hufung.github.io/images/chatro.svg',
+                                vibrate: [200, 100, 200],
+                            });
+                            notification.onclick = () => {
+                                window.focus();
+                                notification.close();
+                            };
+                        }
+                    });
+                }
+
                 alert(`Incoming connection from ${peerName} (${conn.peer})`);
             });
         }
@@ -1014,6 +1059,39 @@
                     }
                     conn = connection;
                     setupConnection();
+                    const peerName = conn.metadata?.name || 'Unknown';
+                    knownPeers[conn.peer] = peerName;
+                    localStorage.setItem('knownPeers', JSON.stringify(knownPeers));
+                    updatePeerList();
+
+                    // Show notification for incoming connection
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                        const notification = new Notification('New Connection Request', {
+                            body: `Incoming connection from ${peerName} (${conn.peer})`,
+                            icon: 'https://hufung.github.io/images/chatro.svg',
+                            vibrate: [200, 100, 200],
+                        });
+                        notification.onclick = () => {
+                            window.focus();
+                            notification.close();
+                        };
+                    } else if ('Notification' in window && Notification.permission !== 'denied') {
+                        Notification.requestPermission().then((permission) => {
+                            if (permission === 'granted') {
+                                const notification = new Notification('New Connection Request', {
+                                    body: `Incoming connection from ${peerName} (${conn.peer})`,
+                                    icon: 'https://hufung.github.io/images/chatro.svg',
+                                    vibrate: [200, 100, 200],
+                                });
+                                notification.onclick = () => {
+                                    window.focus();
+                                    notification.close();
+                                };
+                            }
+                        });
+                    }
+
+                    alert(`Incoming connection from ${peerName} (${conn.peer})`);
                 });
                 peer.on('call', (incomingCall) => {
                     navigator.mediaDevices.getUserMedia({ audio: true })
@@ -1092,5 +1170,6 @@
         // Initial load
         loadMessages();
     </script>
+    <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'92443414f9a9ad65',t:'MTc0MjYzMDkzMC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
 </body>
 </html>
