@@ -396,22 +396,22 @@
         const usernameInput = document.getElementById('username-input');
         const themeToggle = document.getElementById('theme-toggle');
 
-        // Request notification permission on page load
-        document.addEventListener('DOMContentLoaded', () => {
-            if ('Notification' in window) {
-                Notification.requestPermission().then((permission) => {
-                    if (permission === 'granted') {
-                        console.log('Notification permission granted.');
-                    } else {
-                        console.log('Notification permission denied.');
-                        alert('Notifications are disabled. You won’t receive alerts for incoming connections.');
-                    }
-                });
-            } else {
-                console.log('Notifications not supported in this browser.');
-                alert('Your browser does not support notifications. You won’t receive alerts for incoming connections.');
-            }
-        });
+        // Service Worker Registration
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => {
+                        console.log('Service Worker registered:', reg);
+                        // Request notification permission
+                        Notification.requestPermission().then(permission => {
+                            if (permission === 'granted') {
+                                console.log('Notification permission granted.');
+                            }
+                        });
+                    })
+                    .catch(err => console.error('Service Worker registration failed:', err));
+            });
+        }
 
         // Load or set username from localStorage
         let currentUser = localStorage.getItem('chatUsername') || '';
@@ -421,7 +421,6 @@
         }
         usernameInput.value = currentUser;
 
-        // Load messages from localStorage
         let messages = JSON.parse(localStorage.getItem('chatMessages')) || [];
         let peer;
         let conn;
@@ -451,7 +450,7 @@
             return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         }
 
-        // Update username on input change
+        // Update username
         usernameInput.addEventListener('change', () => {
             currentUser = encodeHTML(usernameInput.value.trim()) || `User_${Math.random().toString(36).substr(2, 5)}`;
             localStorage.setItem('chatUsername', currentUser);
@@ -465,10 +464,10 @@
             localStorage.setItem('myPeerId', myPeerId);
         }
 
-        // Load peer list from localStorage
+        // Load peer list
         let knownPeers = JSON.parse(localStorage.getItem('knownPeers')) || {};
 
-        // Add message to chat and localStorage
+        // Add message to chat
         function addMessage(text, sender, isSent, verified = true, isFile = false, fileData = null, fileName = '', isLocation = false, latitude = null, longitude = null) {
             const messageDiv = document.createElement('div');
             messageDiv.classList.add('message');
@@ -506,14 +505,7 @@
             chatMessages.appendChild(messageDiv);
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
-            messages.push({ 
-                text: isFile ? `Sent file: ${fileName}` : (isLocation ? `Shared location: ${latitude},${longitude}` : text), 
-                sender, 
-                time, 
-                isSent, 
-                isFile, 
-                isLocation 
-            });
+            messages.push({ text: isFile ? `Sent file: ${fileName}` : (isLocation ? `Shared location: ${latitude},${longitude}` : text), sender, time, isSent, isFile, isLocation });
             localStorage.setItem('chatMessages', JSON.stringify(messages));
         }
 
@@ -537,7 +529,7 @@
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
-        // Clear chatroom function
+        // Clear chatroom
         function clearChat() {
             chatMessages.innerHTML = '';
             messages = [];
@@ -545,7 +537,7 @@
             alert('Chatroom cleared.');
         }
 
-        // Send text message with SHA-256 hash
+        // Send message with background sync
         async function sendMessage() {
             const text = messageInput.value.trim();
             if (text) {
@@ -556,7 +548,14 @@
                     addMessage(text, currentUser, true);
                 } else {
                     addMessage(text, currentUser, true);
-                    if (!isOnline) {
+                    if ('SyncManager' in window) {
+                        navigator.serviceWorker.ready.then(reg => {
+                            reg.sync.register('send-message').then(() => {
+                                localStorage.setItem('pendingMessage', data);
+                                alert('Message queued for background sync.');
+                            });
+                        });
+                    } else {
                         alert('You are offline. Message saved locally.');
                     }
                 }
@@ -568,31 +567,29 @@
         async function sendFile(file) {
             const reader = new FileReader();
             reader.onload = async () => {
-                const fileData = reader.result; // ArrayBuffer
+                const fileData = reader.result;
                 const fileName = file.name;
                 const hash = await sha256(fileData);
-                const data = JSON.stringify({ 
-                    type: 'file', 
-                    sender: currentUser, 
-                    fileName, 
-                    fileData: Array.from(new Uint8Array(fileData)), 
-                    hash 
-                });
+                const data = JSON.stringify({ type: 'file', sender: currentUser, fileName, fileData: Array.from(new Uint8Array(fileData)), hash });
                 if (isOnline && conn && conn.open) {
                     conn.send(data);
                     addMessage(`Sent file: ${fileName}`, currentUser, true, true, true, URL.createObjectURL(file), fileName);
-                    alert('File sent successfully!');
                 } else {
                     addMessage(`File "${fileName}" saved locally (offline).`, currentUser, true, true, true, URL.createObjectURL(file), fileName);
-                    if (!isOnline) {
-                        alert('You are offline. File saved locally.');
+                    if ('SyncManager' in window) {
+                        navigator.serviceWorker.ready.then(reg => {
+                            reg.sync.register('send-file').then(() => {
+                                localStorage.setItem('pendingFile', data);
+                                alert('File queued for background sync.');
+                            });
+                        });
                     }
                 }
             };
             reader.readAsArrayBuffer(file);
         }
 
-        // Share location with improved accuracy
+        // Share location
         async function shareLocation() {
             if (!isOnline || !conn || !conn.open) {
                 alert('Cannot share location while offline or not connected.');
@@ -602,70 +599,37 @@
                 alert('Geolocation is not supported by your browser.');
                 return;
             }
-
             navigator.geolocation.getCurrentPosition(
                 async (position) => {
                     const { latitude, longitude, accuracy } = position.coords;
                     const locationText = `Location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} (Accuracy: ${accuracy.toFixed(1)}m)`;
                     const hash = await sha256(locationText);
-                    const data = JSON.stringify({ 
-                        type: 'location', 
-                        sender: currentUser, 
-                        latitude, 
-                        longitude, 
-                        accuracy, 
-                        hash 
-                    });
+                    const data = JSON.stringify({ type: 'location', sender: currentUser, latitude, longitude, accuracy, hash });
                     conn.send(data);
                     addMessage(locationText, currentUser, true, true, false, null, '', true, latitude, longitude);
-                    alert('Location shared successfully! Accuracy: ' + accuracy.toFixed(1) + ' meters');
                 },
                 (error) => {
-                    let errorMessage = 'Failed to share location: ';
-                    switch (error.code) {
-                        case error.PERMISSION_DENIED:
-                            errorMessage += 'Permission denied.';
-                            break;
-                        case error.POSITION_UNAVAILABLE:
-                            errorMessage += 'Location unavailable.';
-                            break;
-                        case error.TIMEOUT:
-                            errorMessage += 'Request timed out. Try again for better accuracy.';
-                            break;
-                        default:
-                            errorMessage += 'Unknown error.';
-                    }
-                    alert(errorMessage);
+                    alert('Failed to share location: ' + error.message);
                 },
-                {
-                    enableHighAccuracy: true,
-                    maximumAge: 0,
-                    timeout: 10000
-                }
+                { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
             );
         }
 
-        // Handle file input change
+        // File input handler
         fileInput.addEventListener('change', () => {
             const file = fileInput.files[0];
-            if (file) {
-                sendFile(file);
-                fileInput.value = '';
-            }
+            if (file) sendFile(file);
+            fileInput.value = '';
         });
 
-        // Trigger file input click
-        fileButton.addEventListener('click', () => {
-            fileInput.click();
-        });
+        fileButton.addEventListener('click', () => fileInput.click());
 
-        // Start audio call with noise reduction
+        // Start call
         async function startCall() {
             if (!isOnline || !conn || !conn.open) {
                 alert('Cannot start call while offline or not connected.');
                 return;
             }
-
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -688,21 +652,17 @@
                     endCallButton.style.display = 'inline-block';
                     callButton.disabled = true;
                 });
-                call.on('close', () => {
-                    endCall();
-                });
+                call.on('close', endCall);
                 call.on('error', (err) => {
-                    console.error('Call error:', err);
                     alert('Call error: ' + err.message);
                     endCall();
                 });
             } catch (err) {
-                console.error('Media error:', err);
                 alert('Failed to access microphone: ' + err.message);
             }
         }
 
-        // End audio call
+        // End call
         function endCall() {
             if (localStream) {
                 localStream.getTracks().forEach(track => track.stop());
@@ -723,7 +683,7 @@
             callButton.disabled = !isOnline || !conn || !conn.open;
         }
 
-        // Update peer list UI with online status
+        // Update peer list
         function updatePeerList() {
             peerList.innerHTML = '';
             for (const [id, name] of Object.entries(knownPeers)) {
@@ -740,7 +700,7 @@
             }
         }
 
-        // Check peer online status
+        // Check peer status
         function checkPeerStatus() {
             if (!isOnline || !peer) return;
             for (const id in knownPeers) {
@@ -763,7 +723,7 @@
             }
         }
 
-        // Update online/offline status
+        // Update status
         function updateStatus() {
             isOnline = navigator.onLine;
             status.textContent = isOnline ? 'Online' : 'Offline';
@@ -775,23 +735,15 @@
             callButton.disabled = !isOnline || !conn || !conn.open || (call && call.open);
             endCallButton.style.display = (call && call.open) ? 'inline-block' : 'none';
             locationButton.disabled = !isOnline || !conn || !conn.open;
-            if (!isOnline) {
-                alert('You are offline. You can still write messages or save files locally.');
-            } else {
-                alert('You are back online!');
-                checkPeerStatus();
-            }
         }
 
-        // Initialize PeerJS with persistent ID (if online)
+        // Initialize PeerJS
         if (isOnline) {
             peer = new Peer(myPeerId);
             peer.on('open', (id) => {
                 peerIdInput.value = id;
                 status.textContent = 'Online';
-                alert('Welcome! Please set your username in the header above.');
-                alert('Share your Peer ID with someone to chat!');
-                console.log('Peer ID:', id);
+                alert('Welcome! Please set your username.');
                 loadMessages();
                 updatePeerList();
                 setInterval(checkPeerStatus, 30000);
@@ -818,33 +770,26 @@
                             const audio = new Audio();
                             audio.srcObject = remoteStream;
                             audio.play();
-                            alert('Call received and answered!');
+                            alert('Call received!');
                             endCallButton.style.display = 'inline-block';
                             callButton.disabled = true;
                         });
-                        call.on('close', () => {
-                            endCall();
-                        });
+                        call.on('close', endCall);
                         call.on('error', (err) => {
-                            console.error('Call error:', err);
                             alert('Call error: ' + err.message);
                             endCall();
                         });
                     })
-                    .catch((err) => {
-                        console.error('Media error:', err);
-                        alert('Failed to answer call: ' + err.message);
-                    });
+                    .catch((err) => alert('Failed to answer call: ' + err.message));
             });
         } else {
             peerIdInput.value = myPeerId;
             status.textContent = 'Offline';
-            alert('You are offline. Set your username and write messages or save files locally.');
             loadMessages();
             updatePeerList();
         }
 
-        // Handle incoming connections with notification
+        // Handle incoming connections
         if (peer) {
             peer.on('connection', (connection) => {
                 if (connection.metadata?.ping) {
@@ -860,38 +805,19 @@
                 localStorage.setItem('knownPeers', JSON.stringify(knownPeers));
                 updatePeerList();
 
-                // Show notification for incoming connection
                 if ('Notification' in window && Notification.permission === 'granted') {
-                    const notification = new Notification('New Connection Request', {
-                        body: `Incoming connection from ${peerName} (${conn.peer})`,
-                        icon: 'https://hufung.github.io/images/chatro.svg',
-                        vibrate: [200, 100, 200],
-                    });
-                    notification.onclick = () => {
-                        window.focus();
-                        notification.close();
-                    };
-                } else if ('Notification' in window && Notification.permission !== 'denied') {
-                    Notification.requestPermission().then((permission) => {
-                        if (permission === 'granted') {
-                            const notification = new Notification('New Connection Request', {
-                                body: `Incoming connection from ${peerName} (${conn.peer})`,
-                                icon: 'https://hufung.github.io/images/chatro.svg',
-                                vibrate: [200, 100, 200],
-                            });
-                            notification.onclick = () => {
-                                window.focus();
-                                notification.close();
-                            };
-                        }
+                    navigator.serviceWorker.ready.then(reg => {
+                        reg.showNotification('New Connection', {
+                            body: `Incoming connection from ${peerName} (${conn.peer})`,
+                            icon: 'https://hufung.github.io/images/chatro.svg',
+                            vibrate: [200, 100, 200],
+                        });
                     });
                 }
-
-                alert(`Incoming connection from ${peerName} (${conn.peer})`);
             });
         }
 
-        // Connect to another peer
+        // Connect to peer
         connectButton.addEventListener('click', () => {
             if (!isOnline) {
                 alert('Cannot connect while offline.');
@@ -910,7 +836,7 @@
             }
         });
 
-        // Disconnect from peer
+        // Disconnect
         disconnectButton.addEventListener('click', () => {
             if (conn && conn.open) {
                 conn.close();
@@ -922,12 +848,11 @@
                 callButton.disabled = false;
                 connectButton.disabled = false;
                 disconnectButton.style.display = 'none';
-                alert('You disconnected from the peer');
                 checkPeerStatus();
             }
         });
 
-        // Setup connection handlers
+        // Setup connection
         function setupConnection() {
             conn.on('open', () => {
                 status.textContent = 'Connected to ' + conn.peer;
@@ -938,14 +863,8 @@
                 locationButton.disabled = false;
                 connectButton.disabled = true;
                 disconnectButton.style.display = 'inline-block';
-                alert('Connected to peer!');
                 peerStatus[conn.peer] = true;
                 updatePeerList();
-                if (conn.metadata?.name) {
-                    knownPeers[conn.peer] = conn.metadata.name;
-                    localStorage.setItem('knownPeers', JSON.stringify(knownPeers));
-                    updatePeerList();
-                }
             });
 
             conn.on('data', async (data) => {
@@ -955,33 +874,20 @@
                     const computedHash = await sha256(text);
                     const isVerified = computedHash === hash;
                     addMessage(text, sender, false, isVerified);
-                    if (!isVerified) {
-                        alert('Warning: Message integrity check failed!');
-                    }
                 } else if (parsedData.type === 'file') {
                     const { sender, fileName, fileData, hash } = parsedData;
                     const fileBuffer = new Uint8Array(fileData).buffer;
                     const computedHash = await sha256(fileBuffer);
                     const isVerified = computedHash === hash;
-                    const blob = new Blob([fileBuffer], { type: 'application/octet-stream' });
+                    const blob = new Blob([fileBuffer]);
                     const url = URL.createObjectURL(blob);
                     addMessage(`Received file: ${fileName}`, sender, false, isVerified, true, url, fileName);
-                    if (!isVerified) {
-                        alert('Warning: File integrity check failed!');
-                    } else {
-                        alert('File received successfully!');
-                    }
                 } else if (parsedData.type === 'location') {
                     const { sender, latitude, longitude, accuracy, hash } = parsedData;
                     const locationText = `Location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} (Accuracy: ${accuracy.toFixed(1)}m)`;
                     const computedHash = await sha256(locationText);
                     const isVerified = computedHash === hash;
                     addMessage(locationText, sender, false, isVerified, false, null, '', true, latitude, longitude);
-                    if (!isVerified) {
-                        alert('Warning: Location integrity check failed!');
-                    } else {
-                        alert('Location received successfully! Accuracy: ' + accuracy.toFixed(1) + ' meters');
-                    }
                 }
             });
 
@@ -995,33 +901,20 @@
                 connectButton.disabled = false;
                 disconnectButton.style.display = 'none';
                 endCall();
-                alert('Peer disconnected');
-                peerStatus[conn.peer] = false;
-                updatePeerList();
-            });
-
-            conn.on('error', (err) => {
-                console.error('Connection error:', err);
-                status.textContent = 'Error: ' + err.message;
                 peerStatus[conn.peer] = false;
                 updatePeerList();
             });
         }
 
-        // Copy Peer ID to clipboard
+        // Copy Peer ID
         copyButton.addEventListener('click', () => {
             peerIdInput.select();
             navigator.clipboard.writeText(peerIdInput.value)
-                .then(() => {
-                    alert('Peer ID copied to clipboard!');
-                })
-                .catch((err) => {
-                    console.error('Failed to copy:', err);
-                    alert('Failed to copy ID');
-                });
+                .then(() => alert('Peer ID copied!'))
+                .catch(() => alert('Failed to copy ID'));
         });
 
-        // Event listeners for sending messages and controls
+        // Event listeners
         sendButton.addEventListener('click', sendMessage);
         messageInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendMessage();
@@ -1031,15 +924,7 @@
         clearButton.addEventListener('click', clearChat);
         locationButton.addEventListener('click', shareLocation);
 
-        // Handle PeerJS errors
-        if (peer) {
-            peer.on('error', (err) => {
-                console.error('PeerJS error:', err);
-                status.textContent = 'Error: ' + err.type;
-            });
-        }
-
-        // Online/offline event listeners
+        // Online/offline handling
         window.addEventListener('online', () => {
             isOnline = true;
             if (!peer) {
@@ -1063,74 +948,6 @@
                     knownPeers[conn.peer] = peerName;
                     localStorage.setItem('knownPeers', JSON.stringify(knownPeers));
                     updatePeerList();
-
-                    // Show notification for incoming connection
-                    if ('Notification' in window && Notification.permission === 'granted') {
-                        const notification = new Notification('New Connection Request', {
-                            body: `Incoming connection from ${peerName} (${conn.peer})`,
-                            icon: 'https://hufung.github.io/images/chatro.svg',
-                            vibrate: [200, 100, 200],
-                        });
-                        notification.onclick = () => {
-                            window.focus();
-                            notification.close();
-                        };
-                    } else if ('Notification' in window && Notification.permission !== 'denied') {
-                        Notification.requestPermission().then((permission) => {
-                            if (permission === 'granted') {
-                                const notification = new Notification('New Connection Request', {
-                                    body: `Incoming connection from ${peerName} (${conn.peer})`,
-                                    icon: 'https://hufung.github.io/images/chatro.svg',
-                                    vibrate: [200, 100, 200],
-                                });
-                                notification.onclick = () => {
-                                    window.focus();
-                                    notification.close();
-                                };
-                            }
-                        });
-                    }
-
-                    alert(`Incoming connection from ${peerName} (${conn.peer})`);
-                });
-                peer.on('call', (incomingCall) => {
-                    navigator.mediaDevices.getUserMedia({ audio: true })
-                        .then((stream) => {
-                            localStream = stream;
-                            audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                            sourceNode = audioContext.createMediaStreamSource(localStream);
-                            filterNode = audioContext.createBiquadFilter();
-                            filterNode.type = 'lowpass';
-                            filterNode.frequency.value = 3000;
-                            sourceNode.connect(filterNode);
-                            filterNode.connect(audioContext.destination);
-
-                            const filteredStream = audioContext.createMediaStreamDestination().stream;
-                            sourceNode.connect(audioContext.createMediaStreamDestination());
-
-                            call = incomingCall;
-                            call.answer(filteredStream);
-                            call.on('stream', (remoteStream) => {
-                                const audio = new Audio();
-                                audio.srcObject = remoteStream;
-                                audio.play();
-                                alert('Call received and answered!');
-                                endCallButton.style.display = 'inline-block';
-                                callButton.disabled = true;
-                            });
-                            call.on('close', () => {
-                                endCall();
-                            });
-                            call.on('error', (err) => {
-                                console.error('Call error:', err);
-                                alert('Call error: ' + err.message);
-                                endCall();
-                            });
-                        })
-                        .catch((err) => {
-                            console.error('Media error:', err);
-                            alert('Failed to answer call: ' + err.message);
-                        });
                 });
             }
             updateStatus();
@@ -1160,7 +977,6 @@
             }
         });
 
-        // Load saved theme
         const savedTheme = localStorage.getItem('theme');
         if (savedTheme === 'dark') {
             document.documentElement.setAttribute('data-theme', 'dark');
@@ -1170,6 +986,5 @@
         // Initial load
         loadMessages();
     </script>
-    <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'92443414f9a9ad65',t:'MTc0MjYzMDkzMC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
 </body>
 </html>
